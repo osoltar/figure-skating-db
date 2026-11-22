@@ -2,7 +2,7 @@ import re
 
 # A single jump, e.g. "4T", "3Lz!", "3A<", "4Tq", "1Lz!*", "2A<<"
 JUMP_RE = re.compile(
-    r"^(?P<rotations>\d)(?P<jump>Lz|Lo|Eu|A|F|S|T)(?P<markers>[<q!e*]*)$"
+    r"^(?P<rotations>\d)?(?P<jump>Lz|Lo|Eu|A|F|S|T)(?P<markers>[<q!e*]*)$"
 )
 # Spins and sequences, e.g. "CCoSp4", "FCSpB", "CSSp3V", "StSq4", "ChSq1"
 OTHER_RE = re.compile(
@@ -49,9 +49,14 @@ def split_code(code):
         match = JUMP_RE.match(piece)
         if not match:
             return {"kind": "unknown", "flags": flags, "parts": [], "code": code}
+        rotations = match.group("rotations")
+        if rotations is None:
+            if match.group("jump") != "Eu":
+                return {"kind": "unknown", "flags": flags, "parts": [], "code": code}
+            rotations = 1   # Euler is printed without a number
         parts.append({
             "position": position,
-            "rotations": int(match.group("rotations")),
+            "rotations": int(rotations),
             "jump": match.group("jump"),
             "markers": match.group("markers"),
         })
@@ -62,6 +67,7 @@ def split_code(code):
 if __name__ == "__main__":
     # Quick test on codes from the Grand Prix de France PDF
     tests = ["4T+3T", "4S<", "3F+3T<", "4Lz+COMBO", "4Tq", "1Lz!*",
-             "3Lz!+2T", "2Lz*", "CCoSp4", "FCSpB", "StSq4", "ChSq1", "XYZ"]
+             "3Lz!+2T", "2Lz*", "CCoSp4", "FCSpB", "StSq4", "ChSq1", "XYZ",
+             "3Lz!<+Eu+2S", "2A+Eu+3F+2A+SEQ", "T"]
     for code in tests:
         print(f"{code:<12} {split_code(code)}")

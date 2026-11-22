@@ -51,6 +51,9 @@ def load_file(con, path):
     for s in skaters:
         for problem in check_skater(s):
             print(f"  WARNING {path.name} | {s['name']}: {problem}")
+    ranks = sorted(s["rank"] for s in skaters)
+    if ranks != list(range(1, len(skaters) + 1)):
+        print(f"  WARNING {path.name}: ranks are not 1..{len(skaters)}: {ranks}")
     for s in skaters:
         skater_id = get_or_create(
             con, "skaters", first_name=s["first_name"], last_name=s["last_name"],
