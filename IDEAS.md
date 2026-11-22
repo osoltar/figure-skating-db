@@ -17,3 +17,4 @@
 
 ## Technical
 - [ ] Automate PDF downloads instead of downloading by hand
+- [ ] Measure load time (parsing vs inserting), then cache parsed PDFs as JSON in data/processed/parsed/ so a rebuild only re-parses new PDFs (delete the cache after changing the parser)

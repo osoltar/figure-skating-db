@@ -20,6 +20,10 @@ def split_code(code):
       parts: for jumps, one entry per jump in the element
       base / level / markers: for spins and sequences
     """
+    # Empty slot: no element performed
+    if code == "":
+        return {"kind": "empty", "flags": [], "parts": []}
+
     # Spins and sequences: a single piece, no "+"
     other = OTHER_RE.match(code)
     if other:

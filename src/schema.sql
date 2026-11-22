@@ -48,7 +48,7 @@ CREATE TABLE elements (
     performance_id  INTEGER NOT NULL REFERENCES performances(id),
     number          INTEGER NOT NULL,       -- order in the program
     code            TEXT NOT NULL,          -- as printed: '3F+3T<'
-    kind            TEXT NOT NULL,          -- 'jump', 'spin', 'step', 'choreo', 'unknown'
+    kind            TEXT NOT NULL,          -- 'jump', 'spin', 'step', 'choreo', 'empty', 'unknown'
     info            TEXT NOT NULL DEFAULT '',  -- Info column as printed: 'F <'
     fall            INTEGER NOT NULL DEFAULT 0,
     invalid         INTEGER NOT NULL DEFAULT 0,
@@ -58,7 +58,7 @@ CREATE TABLE elements (
     markers         TEXT,                   -- spins/sequences: 'V'
     base_value      REAL NOT NULL,
     second_half     INTEGER NOT NULL DEFAULT 0,
-    goe             REAL NOT NULL,
+    goe             REAL,                   -- NULL if no GOE (element not validated)
     panel_score     REAL NOT NULL,
     UNIQUE (performance_id, number)
 );

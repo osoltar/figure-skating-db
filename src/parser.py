@@ -8,7 +8,7 @@ PDF_PATH = "data/raw/26-27_GP_GrandPrixDeFrance_M_SP.pdf"
 # Skater line, e.g. "1 Adam SIAO HIM FA FRA 11 102.46 57.25 45.21 0.00"
 # rank, name, nation, starting number, total, TES, PCS, deductions
 SKATER_RE = re.compile(
-    r"^(\d+)\s+(.+?)\s+([A-Z]{3})\s+(\d+)\s+"
+    r"^(\d+)\s+(.+?)\s+([A-Z]{3}\d?)\s+(\d+)\s+"
     r"(\d+\.\d\d)\s+(\d+\.\d\d)\s+(\d+\.\d\d)\s+(-?\d+\.\d\d)$"
 )
 DECIMAL_RE = re.compile(r"^-?\d+\.\d+$")   # 8.80, -0.27
@@ -54,8 +54,13 @@ def parse_element(line):
     if len(tokens) < 6 or not tokens[0].isdigit():
         return None
 
-    number, code = int(tokens[0]), tokens[1]
-    i = 2
+    number = int(tokens[0])
+    if DECIMAL_RE.match(tokens[1]):
+        code = ""        # empty slot: no element code, e.g. "12 0.00 0.00 - - ... 0.00"
+        i = 1
+    else:
+        code = tokens[1]
+        i = 2
 
     # Info markers (<, q, e, !, *) sit between the code and the base value
     info = []
@@ -73,7 +78,7 @@ def parse_element(line):
         second_half = True
         i += 1
 
-    goe = float(tokens[i])
+    goe = None if tokens[i] == "-" else float(tokens[i])   # "-" = no GOE (not validated)
     i += 1
 
     # What's left: the judges' GOEs, then the panel score at the end
@@ -124,7 +129,10 @@ def parse(path):
             continue
         if current is None:
             continue
-        element = parse_element(line)
+        try:
+            element = parse_element(line)
+        except ValueError as err:
+            raise ValueError(f"{path}: could not parse line {line!r}") from err
         if element:
             current["elements"].append(element)
             continue
