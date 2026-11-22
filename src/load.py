@@ -1,3 +1,4 @@
+import csv
 import sqlite3
 from pathlib import Path
 
@@ -5,6 +6,17 @@ from create_db import create_db, DB_PATH
 from parser import parse, check_skater
 
 RAW_DIR = Path("data/raw")
+REFERENCE_DIR = Path("data/reference")
+
+def read_competitions():
+    """Read competitions.csv into a dictionary keyed by (season, series, event_code)."""
+    path = REFERENCE_DIR / "competitions.csv"
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        return {
+            (row["season"], row["series"], row["event_code"]):
+                {k: (v or None) for k, v in row.items()}
+            for row in csv.DictReader(f)
+        }
 
 
 def parse_filename(path):
@@ -21,7 +33,7 @@ def parse_filename(path):
 
 def get_or_create(con, table, **values):
     """Return the id of the row matching `values`, inserting it first if needed."""
-    where = " AND ".join(f"{col} = ?" for col in values)
+    where = " AND ".join(f"{col} IS ?" for col in values)
     row = con.execute(f"SELECT id FROM {table} WHERE {where}",
                       tuple(values.values())).fetchone()
     if row:
@@ -33,13 +45,20 @@ def get_or_create(con, table, **values):
     return cur.lastrowid
 
 
-def load_file(con, path):
+def load_file(con, path, competitions):
     """Parse one PDF and insert everything into the database."""
     meta = parse_filename(path)
 
+    key = (meta["season"], meta["series"], meta["event_code"])
+    info = competitions.get(key)
+    if info is None:
+        print(f"  WARNING {path.name}: {key} not found in competitions.csv")
+        info = {}
     competition_id = get_or_create(
         con, "competitions",
         season=meta["season"], series=meta["series"], event_code=meta["event_code"],
+        name=info.get("name"), city=info.get("city"), country=info.get("country"),
+        start_date=info.get("start_date"), end_date=info.get("end_date"),
     )
     segment_id = con.execute(
         "INSERT INTO segments (competition_id, category, segment, source_file) "
@@ -114,9 +133,10 @@ def main():
     create_db()
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
+    competitions = read_competitions()
     for path in sorted(RAW_DIR.glob("*.pdf")):
         with con:
-            n = load_file(con, path)
+            n = load_file(con, path, competitions)
         print(f"{path.name}: {n} skaters loaded")
     con.close()
 

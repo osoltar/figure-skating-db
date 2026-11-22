@@ -7,6 +7,10 @@ CREATE TABLE competitions (
     series      TEXT NOT NULL,              -- 'GP', 'CS', ...
     event_code  TEXT NOT NULL,              -- 'GrandPrixDeFrance' (from the filename)
     name        TEXT,                       -- official name, filled in later
+    city        TEXT,
+    country     TEXT,
+    start_date  TEXT,                       -- 'YYYY-MM-DD'
+    end_date    TEXT,
     UNIQUE (season, series, event_code)
 );
 
