@@ -8,6 +8,7 @@
 - [ ] Add pairs and ice dance
 - [ ] Handle old scoring rules (GOE ±3 before 2018, old component names before 2022)
 - [ ] Link skaters to their ISU page (isu-skating.com slug)
+- [ ] Improve skater matching: PDFs have no birth date, so skaters are matched on first + last name for now; add birth date and handle name changes
 
 ## Features
 - [ ] Rankings: best elements by GOE, highest PCS, etc.
