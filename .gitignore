@@ -1,0 +1,12 @@
+# Data: too big for git, and can be re-downloaded or regenerated
+data/raw/*.pdf
+data/processed/*.db
+
+# Python clutter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Editor / OS
+.vscode/
+Thumbs.db
