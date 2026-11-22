@@ -10,6 +10,7 @@
 - [ ] Handle old scoring rules (GOE ±3 before 2018, old component names before 2022)
 - [ ] Link skaters to their ISU page (isu-skating.com slug)
 - [ ] Improve skater matching: PDFs have no birth date, so skaters are matched on first + last name for now; add birth date and handle name changes
+- [ ] Name corrections: data/reference/skater_names.csv mapping a name as printed in protocols to the correct first/last name split (e.g. Sophie Jolene VON FELTEN, where "von" ends up in the first name), applied by the loader before matching; can also fix spelling differences between events
 
 ## Features
 - [ ] Rankings: best elements by GOE, highest PCS, etc.

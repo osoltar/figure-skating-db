@@ -106,3 +106,25 @@ CREATE TABLE component_judge_scores (
     mark          REAL,
     PRIMARY KEY (component_id, judge)
 );
+
+-- Overall results per competition and category: SP + FS combined, with rank
+CREATE VIEW competition_results AS
+WITH totals AS (
+    SELECT c.id AS competition_id, c.season, c.event_code, c.name AS competition,
+           s.category, sk.id AS skater_id, sk.first_name, sk.last_name,
+           MAX(p.nation) AS nation,
+           SUM(CASE WHEN s.segment = 'SP' THEN p.total END) AS sp,
+           SUM(CASE WHEN s.segment = 'FS' THEN p.total END) AS fs,
+           ROUND(SUM(p.total), 2) AS total
+    FROM performances p
+    JOIN segments s     ON p.segment_id = s.id
+    JOIN competitions c ON s.competition_id = c.id
+    JOIN skaters sk     ON p.skater_id = sk.id
+    GROUP BY c.id, s.category, sk.id
+)
+SELECT *,
+       CASE WHEN fs IS NULL THEN NULL
+            ELSE RANK() OVER (PARTITION BY competition_id, category
+                              ORDER BY fs IS NULL, total DESC, fs DESC)
+       END AS rank
+FROM totals;
