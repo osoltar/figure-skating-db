@@ -12,6 +12,8 @@ SKATER_RE = re.compile(
 )
 DECIMAL_RE = re.compile(r"^-?\d+\.\d+$")   # 8.80, -0.27
 JUDGE_RE = re.compile(r"^(-?\d|-)$")       # one judge's GOE: -5..5, or "-" if missing
+# Component line, e.g. "Composition 1.67 9.25 9.50 9.00 8.75 9.25 8.75 9.25 9.00 9.00 9.07"
+COMPONENT_RE = re.compile(r"^(Composition|Presentation|Skating Skills)\s+(\d+\.\d\d)\s+(.+)$")
 
 
 def read_lines(path):
@@ -40,6 +42,7 @@ def parse_skater(match):
         "pcs": float(pcs),
         "deductions": float(ded),
         "elements": [],
+        "components": [],
     }
 
 
@@ -92,6 +95,21 @@ def parse_element(line):
     }
 
 
+def parse_component(line):
+    """Parse a component line. Returns a dictionary, or None."""
+    match = COMPONENT_RE.match(line)
+    if not match:
+        return None
+    name, factor, rest = match.groups()
+    marks = rest.split()
+    return {
+        "name": name,
+        "factor": float(factor),
+        "judges": [None if m == "-" else float(m) for m in marks[:-1]],
+        "panel_score": float(marks[-1]),
+    }
+
+
 def parse(path):
     """Go through the PDF line by line and build a list of skaters."""
     skaters = []
@@ -107,6 +125,10 @@ def parse(path):
         element = parse_element(line)
         if element:
             current["elements"].append(element)
+            continue
+        component = parse_component(line)
+        if component:
+            current["components"].append(component)
     return skaters
 
 
@@ -114,7 +136,18 @@ if __name__ == "__main__":
     skaters = parse(PDF_PATH)
     print(len(skaters), "skaters found\n")
     for s in skaters:
-        total = round(sum(e["panel_score"] for e in s["elements"]), 2)
-        status = "OK" if abs(total - s["tes"]) < 0.01 else "MISMATCH"
+        tes = round(sum(e["panel_score"] for e in s["elements"]), 2)
+        pcs = round(sum(c["panel_score"] * c["factor"] for c in s["components"]), 2)
+        tes_ok = abs(tes - s["tes"]) < 0.01
+        pcs_ok = abs(pcs - s["pcs"]) < 0.02
+        status = "OK" if tes_ok and pcs_ok else "MISMATCH"
         print(f'{s["rank"]:>2} {s["name"]:<28} {s["nation"]} '
-              f'elements={len(s["elements"])} TES={s["tes"]} sum={total} {status}')
+              f'el={len(s["elements"])} comp={len(s["components"])} '
+              f'TES={s["tes"]}/{tes} PCS={s["pcs"]}/{pcs} {status}')
+
+    # Show elements with info markers, to check they're captured
+    print("\nElements with markers:")
+    for s in skaters:
+        for e in s["elements"]:
+            if e["info"]:
+                print(f'  {s["last_name"]:<15} {e["code"]:<10} info="{e["info"]}"')
