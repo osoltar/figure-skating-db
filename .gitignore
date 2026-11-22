@@ -1,6 +1,7 @@
 # Data: too big for git, and can be re-downloaded or regenerated
 data/raw/*.pdf
 data/processed/*.db
+data/raw/judges
 
 # Python clutter
 __pycache__/

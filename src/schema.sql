@@ -107,6 +107,24 @@ CREATE TABLE component_judge_scores (
     PRIMARY KEY (component_id, judge)
 );
 
+-- People on officials' panels (judges, technical panel, referee...)
+CREATE TABLE officials (
+    id          INTEGER PRIMARY KEY,
+    first_name  TEXT NOT NULL,
+    last_name   TEXT NOT NULL
+);
+
+-- Who sat where for each segment
+CREATE TABLE panel (
+    segment_id    INTEGER NOT NULL REFERENCES segments(id),
+    role          TEXT NOT NULL,     -- 'Judge', 'Referee', 'Technical Controller', 'Technical Specialist', ...
+    judge_number  INTEGER,           -- 1..9 for judges, NULL for other roles
+    official_id   INTEGER NOT NULL REFERENCES officials(id),
+    nation        TEXT NOT NULL,     -- nation at that event ('ISU' for the technical panel)
+    UNIQUE (segment_id, role, official_id),
+    UNIQUE (segment_id, judge_number)
+);
+
 -- Overall results per competition and category: SP + FS combined, with rank
 CREATE VIEW competition_results AS
 WITH totals AS (

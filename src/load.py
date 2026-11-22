@@ -4,6 +4,7 @@ from pathlib import Path
 
 from create_db import create_db, DB_PATH
 from parser import parse, check_skater
+from panel_parser import parse_panel
 
 RAW_DIR = Path("data/raw")
 REFERENCE_DIR = Path("data/reference")
@@ -65,7 +66,21 @@ def load_file(con, path, competitions):
         "VALUES (?, ?, ?, ?)",
         (competition_id, meta["category"], meta["segment"], path.name),
     ).lastrowid
-
+    panel_path = RAW_DIR / "judges" / (path.stem + ".html")
+    if panel_path.exists():
+        for member in parse_panel(panel_path):
+            official_id = get_or_create(
+                con, "officials",
+                first_name=member["first_name"], last_name=member["last_name"],
+            )
+            con.execute(
+                "INSERT INTO panel (segment_id, role, judge_number, official_id, nation) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (segment_id, member["role"], member["judge_number"], official_id,
+                 member["nation"]),
+            )
+    else:
+        print(f"  WARNING {path.name}: no panel file {panel_path.name}")
     skaters = parse(path)
     for s in skaters:
         for problem in check_skater(s):
