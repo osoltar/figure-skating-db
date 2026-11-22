@@ -2,7 +2,7 @@ import sqlite3
 from pathlib import Path
 
 from create_db import create_db, DB_PATH
-from parser import parse
+from parser import parse, check_skater
 
 RAW_DIR = Path("data/raw")
 
@@ -48,6 +48,9 @@ def load_file(con, path):
     ).lastrowid
 
     skaters = parse(path)
+    for s in skaters:
+        for problem in check_skater(s):
+            print(f"  WARNING {path.name} | {s['name']}: {problem}")
     for s in skaters:
         skater_id = get_or_create(
             con, "skaters", first_name=s["first_name"], last_name=s["last_name"],

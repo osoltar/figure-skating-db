@@ -133,30 +133,37 @@ def parse(path):
             current["components"].append(component)
     return skaters
 
+def check_skater(s):
+    """Return a list of problems found for one skater (empty list = all good)."""
+    problems = []
+
+    if not s["elements"]:
+        problems.append("no elements found")
+    if len(s["components"]) != 3:
+        problems.append(f"{len(s['components'])} components found instead of 3")
+
+    tes = round(sum(e["panel_score"] for e in s["elements"]), 2)
+    if abs(tes - s["tes"]) >= 0.01:
+        problems.append(f"TES is {s['tes']} but elements add up to {tes}")
+
+    pcs = round(sum(c["panel_score"] * c["factor"] for c in s["components"]), 2)
+    if abs(pcs - s["pcs"]) >= 0.02:
+        problems.append(f"PCS is {s['pcs']} but components give {pcs}")
+
+    total = round(s["tes"] + s["pcs"] - abs(s["deductions"]), 2)
+    if abs(total - s["total"]) >= 0.01:
+        problems.append(f"total is {s['total']} but TES + PCS - deductions = {total}")
+
+    for e in s["elements"]:
+        if e["split"]["kind"] == "unknown":
+            problems.append(f"unrecognised element code {e['code']}")
+
+    return problems
 
 if __name__ == "__main__":
     skaters = parse(PDF_PATH)
     print(len(skaters), "skaters found\n")
     for s in skaters:
-        tes = round(sum(e["panel_score"] for e in s["elements"]), 2)
-        pcs = round(sum(c["panel_score"] * c["factor"] for c in s["components"]), 2)
-        tes_ok = abs(tes - s["tes"]) < 0.01
-        pcs_ok = abs(pcs - s["pcs"]) < 0.02
-        status = "OK" if tes_ok and pcs_ok else "MISMATCH"
-        print(f'{s["rank"]:>2} {s["name"]:<28} {s["nation"]} '
-              f'el={len(s["elements"])} comp={len(s["components"])} '
-              f'TES={s["tes"]}/{tes} PCS={s["pcs"]}/{pcs} {status}')
-
-    # Show elements with info markers, to check they're captured
-    print("\nElements with markers:")
-    for s in skaters:
-        for e in s["elements"]:
-            if e["info"]:
-                print(f'  {s["last_name"]:<15} {e["code"]:<10} info="{e["info"]}"')
-
-
-    print("\nUnrecognised element codes:")
-    for s in skaters:
-        for e in s["elements"]:
-            if e["split"]["kind"] == "unknown":
-                print(f'  {s["last_name"]:<15} {e["code"]}')
+        problems = check_skater(s)
+        status = "OK" if not problems else "; ".join(problems)
+        print(f'{s["rank"]:>2} {s["name"]:<28} {s["nation"]} {status}')
