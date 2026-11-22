@@ -1,5 +1,6 @@
 import re
 import pdfplumber
+from element_codes import split_code
 
 PDF_PATH = "data/raw/26-27_GP_GrandPrixDeFrance_M_SP.pdf"
 
@@ -86,7 +87,8 @@ def parse_element(line):
     return {
         "number": number,
         "code": code,
-        "info": " ".join(info),
+        "info": [m for token in info for m in token.split(",") if m],
+        "split": split_code(code),
         "base_value": base_value,
         "second_half": second_half,
         "goe": goe,
@@ -151,3 +153,10 @@ if __name__ == "__main__":
         for e in s["elements"]:
             if e["info"]:
                 print(f'  {s["last_name"]:<15} {e["code"]:<10} info="{e["info"]}"')
+
+
+    print("\nUnrecognised element codes:")
+    for s in skaters:
+        for e in s["elements"]:
+            if e["split"]["kind"] == "unknown":
+                print(f'  {s["last_name"]:<15} {e["code"]}')
