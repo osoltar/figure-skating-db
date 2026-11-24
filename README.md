@@ -8,7 +8,7 @@ A personal side project to learn git and to build a real data pipeline from star
 
 - Season 2026/27, singles (men and women), short program and free skating
 - ISU Grand Prix: Skate America, Skate Canada International, Cup of China, Grand Prix de France, Finlandia Trophy
-- Next: Grand Prix Final, Challenger Series
+- Next:NHK Trophy, Grand Prix Final, Challenger Series
 
 ## How it works
 
