@@ -3,6 +3,7 @@ data/raw/*.pdf
 data/processed/*.db
 data/processed/parsed/
 data/raw/judges
+data/raw/index
 
 # Python clutter
 __pycache__/

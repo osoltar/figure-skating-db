@@ -7,66 +7,41 @@ Usage (from the project root):
 Files already on disk are skipped, so running it again only fetches what's new.
 """
 import csv
-import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urljoin
 
 import requests
-from bs4 import BeautifulSoup
+
+from index_parser import CATEGORIES, SEGMENTS, find_event_info, find_segments
 
 RAW_DIR = Path("data/raw")
 PANEL_DIR = RAW_DIR / "judges"
+INDEX_DIR = RAW_DIR / "index"
 COMPETITIONS_CSV = Path("data/reference/competitions.csv")
-
-# Labels on the results page -> codes used in our filenames.
-# Anything not listed (Pairs, Ice Dance, Junior Men...) is skipped.
-CATEGORIES = {"Men": "M", "Women": "W"}
-SEGMENTS = {"Short Program": "SP", "Free Skating": "FS"}
 
 HEADERS = {"User-Agent": "skating-results-db (personal project)"}
 TIMEOUT = 30           # seconds to wait for a server before giving up
 PAUSE = 1.0            # seconds between downloads, to be polite to the servers
 
-CATEGORY_LINK_RE = re.compile(r"CAT\d+(EN|RS)\.htm$", re.IGNORECASE)
+# Competition details copied from the results page into empty cells of competitions.csv
+EVENT_FIELDS = ["city", "country", "venue", "start_date", "end_date"]
 
 
-def find_segments(html, page_url):
-    """Read a results index page and list the segments we want.
+def fill_from_page(comp, info):
+    """Copy details found on the results page into the competition's empty fields.
+    Values already in the CSV are never replaced. Returns the names of the fields filled."""
+    filled = []
+    for field in EVENT_FIELDS:
+        if not (comp.get(field) or "").strip() and info.get(field):
+            comp[field] = info[field]
+            filled.append(field)
+    return filled
 
-    Returns a list of dictionaries:
-      {"category": "M", "segment": "SP", "panel_url": "...", "pdf_url": "..."}
-    """
-    soup = BeautifulSoup(html, "html.parser")
-    segments = []
-    category = None   # the category of the rows that follow, None = skip them
 
-    for row in soup.find_all("tr"):
-        cells = row.find_all("td", class_="CellLeft", recursive=False)
-        if not cells:
-            continue
-        # The label is the first cell with text (segment rows start with an empty cell)
-        texts = [c.get_text(strip=True) for c in cells]
-        label = next((t for t in texts if t), "")
-        hrefs = [a.get("href", "") for a in row.find_all("a")]
-
-        # Category row: "Men | Entries | Result" (links to CAT001EN.htm / CAT001RS.htm)
-        if any(CATEGORY_LINK_RE.search(h) for h in hrefs):
-            category = CATEGORIES.get(label)
-            continue
-
-        # Segment row: "Short Program | Panel of Judges | ... | Judges Scores (pdf)"
-        panel = [h for h in hrefs if h.upper().endswith("OF.HTM")]
-        pdf = [h for h in hrefs if h.lower().endswith(".pdf")]
-        if category and label in SEGMENTS and panel and pdf:
-            segments.append({
-                "category": category,
-                "segment": SEGMENTS[label],
-                "panel_url": urljoin(page_url, panel[0]),
-                "pdf_url": urljoin(page_url, pdf[0]),
-            })
-    return segments
+def index_path(comp):
+    """Where an event's results index page is saved, e.g. data/raw/index/26-27_GP_NHKTrophy.html"""
+    return INDEX_DIR / f"{comp['season']}_{comp['series']}_{comp['event_code']}.html"
 
 
 def decode_html(response):
@@ -129,7 +104,16 @@ def download_competition(session, comp):
         print(f"{code}: {problem}")
         return 0, 0, f"{problem}, {len(missing)} files missing"
 
-    segments = find_segments(decode_html(response), url)
+    html = decode_html(response)
+    # Keep a copy of the index page: the loader reads the segment dates from its schedule
+    save(index_path(comp), html)
+
+    # Fill empty cells of competitions.csv with what the page says (city, venue, dates...)
+    filled = fill_from_page(comp, find_event_info(html))
+    if filled:
+        print(f"{code}: competitions.csv filled in: {', '.join(filled)}")
+
+    segments = find_segments(html, url)
     if len(segments) != len(CATEGORIES) * len(SEGMENTS):
         print(f"{code}: WARNING found {len(segments)} segments, "
               f"expected {len(CATEGORIES) * len(SEGMENTS)}")
@@ -166,13 +150,34 @@ def download_competition(session, comp):
 
 
 def read_competitions():
+    """All rows of competitions.csv, plus its column names (in file order)."""
     with open(COMPETITIONS_CSV, newline="", encoding="utf-8-sig") as f:
-        return list(csv.DictReader(f))
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        columns = list(reader.fieldnames)
+    # Make sure every detail column exists, placed before results_url
+    for field in EVENT_FIELDS:
+        if field not in columns:
+            position = columns.index("results_url") if "results_url" in columns else len(columns)
+            columns.insert(position, field)
+    return rows, columns
+
+
+def write_competitions(rows, columns):
+    """Save competitions.csv, safely (temporary file, then rename)."""
+    tmp = COMPETITIONS_CSV.with_name(COMPETITIONS_CSV.name + ".part")
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+    tmp.replace(COMPETITIONS_CSV)
 
 
 def main():
     wanted = set(sys.argv[1:])   # event codes given on the command line, if any
-    competitions = [c for c in read_competitions()
+    all_rows, columns = read_competitions()
+    before = [dict(row) for row in all_rows]   # to know at the end if anything changed
+    competitions = [c for c in all_rows
                     if not wanted or c["event_code"] in wanted]
     if wanted - {c["event_code"] for c in competitions}:
         print("Unknown event code(s):", ", ".join(sorted(wanted - {c["event_code"] for c in competitions})))
@@ -189,6 +194,10 @@ def main():
                 to_check.append((comp["event_code"], problem))
             total_downloaded += downloaded
             total_skipped += skipped
+
+    if all_rows != before:
+        write_competitions(all_rows, columns)
+        print(f"\n{COMPETITIONS_CSV} updated with details from the results pages.")
 
     print(f"\nDone: {total_downloaded} files downloaded, {total_skipped} already there.")
     if to_check:

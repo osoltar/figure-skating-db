@@ -3,13 +3,16 @@ import hashlib
 import json
 import sqlite3
 import time
+from functools import lru_cache
 from pathlib import Path
 
 from create_db import create_db, DB_PATH
+from index_parser import find_event_info, find_schedule, find_segments
 from parser import parse, check_skater
 from panel_parser import parse_panel
 
 RAW_DIR = Path("data/raw")
+INDEX_DIR = RAW_DIR / "index"
 REFERENCE_DIR = Path("data/reference")
 CACHE_DIR = Path("data/processed/parsed")
 # If any of these files change, every cached result is outdated
@@ -40,6 +43,47 @@ def parse_cached(path, fingerprint):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps({"parser": fingerprint, "skaters": skaters}), encoding="utf-8")
     return skaters, False
+
+
+EVENT_FIELDS = ["city", "country", "venue", "start_date", "end_date"]
+
+
+@lru_cache(maxsize=None)
+def read_index(season, series, event_code):
+    """The saved results index page of an event, or None if it hasn't been downloaded.
+    @lru_cache remembers the answer, so each page is read from disk only once per run."""
+    path = INDEX_DIR / f"{season}_{series}_{event_code}.html"
+    return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+@lru_cache(maxsize=None)
+def event_info(season, series, event_code):
+    """City, country, venue and dates from the index page ({} if there's no page)."""
+    html = read_index(season, series, event_code)
+    return find_event_info(html) if html else {}
+
+
+def competition_details(csv_row, page_info):
+    """Combine both sources: a value in competitions.csv overrides the index page."""
+    return {field: csv_row.get(field) or page_info.get(field) for field in EVENT_FIELDS}
+
+
+@lru_cache(maxsize=None)
+def event_schedule(season, series, event_code):
+    """Date and time of each segment of an event, read from its saved index page.
+
+    Returns {("M", "SP"): {"date": ..., "time": ..., "utc_offset": ...}, ...},
+    or None if the index page hasn't been downloaded.
+    """
+    html = read_index(season, series, event_code)
+    if html is None:
+        return None
+    schedule = find_schedule(html)
+    return {
+        (s["category"], s["segment"]): schedule.get(s["seg_id"], {})
+        for s in find_segments(html, "")
+    }
+
 
 def read_competitions():
     """Read competitions.csv into a dictionary keyed by (season, series, event_code)."""
@@ -78,8 +122,12 @@ def get_or_create(con, table, **values):
     return cur.lastrowid
 
 
-def load_file(con, path, competitions, fingerprint):
-    """Parse one PDF and insert everything into the database."""
+def load_file(con, path, competitions, fingerprint, missing):
+    """Parse one PDF and insert everything into the database.
+
+    `missing` collects competition details found nowhere, as {event_code: {field, ...}},
+    so they can be listed at the end of the run.
+    """
     meta = parse_filename(path)
 
     key = (meta["season"], meta["series"], meta["event_code"])
@@ -87,16 +135,30 @@ def load_file(con, path, competitions, fingerprint):
     if info is None:
         print(f"  WARNING {path.name}: {key} not found in competitions.csv")
         info = {}
+    details = competition_details(info, event_info(*key))
+    gaps = [field for field in EVENT_FIELDS if not details[field]]
+    if not info.get("name"):
+        gaps.insert(0, "name")
+    if gaps:
+        missing.setdefault(meta["event_code"], set()).update(gaps)
     competition_id = get_or_create(
         con, "competitions",
         season=meta["season"], series=meta["series"], event_code=meta["event_code"],
-        name=info.get("name"), city=info.get("city"), country=info.get("country"),
-        start_date=info.get("start_date"), end_date=info.get("end_date"),
+        name=info.get("name"), **details,
     )
+    schedule = event_schedule(meta["season"], meta["series"], meta["event_code"])
+    if schedule is None:
+        print(f"  WARNING {path.name}: no index page, segment date unknown")
+        when = {}
+    else:
+        when = schedule.get((meta["category"], meta["segment"]), {})
+        if not when:
+            print(f"  WARNING {path.name}: segment not found in the index page schedule")
     segment_id = con.execute(
-        "INSERT INTO segments (competition_id, category, segment, source_file) "
-        "VALUES (?, ?, ?, ?)",
-        (competition_id, meta["category"], meta["segment"], path.name),
+        "INSERT INTO segments (competition_id, category, segment, date, start_time, "
+        "utc_offset, source_file) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (competition_id, meta["category"], meta["segment"], when.get("date"),
+         when.get("time"), when.get("utc_offset"), path.name),
     ).lastrowid
     panel_path = RAW_DIR / "judges" / (path.stem + ".html")
     panel_judges = None   # judge numbers on the panel page, if there is one
@@ -200,10 +262,11 @@ def main():
     competitions = read_competitions()
     fingerprint = parser_fingerprint()
     n_cached = n_parsed = 0
+    missing = {}   # competition details found neither on the index page nor in the CSV
     for path in sorted(RAW_DIR.glob("*.pdf")):
         start = time.perf_counter()
         with con:
-            n, cached = load_file(con, path, competitions, fingerprint)
+            n, cached = load_file(con, path, competitions, fingerprint, missing)
         seconds = time.perf_counter() - start
         source = "cache" if cached else "parsed"
         print(f"{path.name}: {n} skaters loaded ({source}, {seconds:.2f}s)")
@@ -214,6 +277,11 @@ def main():
     con.close()
     print(f"\n{n_parsed} PDFs parsed, {n_cached} from cache, "
           f"total {time.perf_counter() - start_all:.1f}s")
+
+    if missing:
+        print("\nPlease fill in data/reference/competitions.csv (not found on any results page):")
+        for event_code, fields in sorted(missing.items()):
+            print(f"  - {event_code}: {', '.join(sorted(fields))}")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ results pages ──► download ──► PDFs + panel pages ──► parsers 
                                                                     judges)
 ```
 
-1. **Download**: `src/download.py` reads each competition's results page (listed in `data/reference/competitions.csv`), finds the senior singles segments, and saves the protocol PDF and the panel of judges page for each, using the naming convention below. Files already on disk are skipped; events that can't be downloaded automatically are listed at the end.
+1. **Download**: `src/download.py` reads each competition's results page (listed in `data/reference/competitions.csv`), finds the senior singles segments, and saves the protocol PDF and the panel of judges page for each, using the naming convention below. The index page itself is kept too: its header gives the event's city, country, venue and dates, and its time schedule gives each segment's date and start time. Files already on disk are skipped; events that can't be downloaded automatically are listed at the end.
 2. **Parse protocols**: `src/parser.py` reads each protocol line by line and extracts skaters, elements, judges' GOEs and program components.
 3. **Split element codes**: `src/element_codes.py` breaks codes like `3Lz!+2T` or `3A+Eu+2S+2A+SEQ` into individual jumps (rotations, jump type, calls such as `<`, `<<`, `q`, `e`, `!`, `*`), and recognises spins, step and choreographic sequences, attempted jumps and empty element slots.
 4. **Parse panels**: `src/panel_parser.py` reads the panel of judges page: referee, technical panel, judges 1–9 and operators.
@@ -33,8 +33,8 @@ The downloaded files are the source of truth: the database is never edited by ha
 
 | Table | One row per |
 |---|---|
-| `competitions` | competition (season, series, event, official name, city, country, dates) |
-| `segments` | category + segment of a competition (one protocol PDF) |
+| `competitions` | competition (season, series, event, official name, city, country, venue, dates) |
+| `segments` | category + segment of a competition (one protocol PDF), with date and local start time |
 | `skaters` | skater |
 | `performances` | skater in a segment: rank, nation, TES, PCS, deductions, total |
 | `elements` | executed element: code, base value, GOE, panel score, fall, second half |
@@ -73,7 +73,7 @@ Requirements: Python 3.12, see `requirements.txt`.
 pip install -r requirements.txt
 ```
 
-1. Add each competition to `data/reference/competitions.csv`, with the address of its results page (`index.htm`) in `results_url`.
+1. Add each competition to `data/reference/competitions.csv`: season, series, event code, name and the address of its results page (`index.htm`) in `results_url`. City, country, venue and dates are copied from the results page into the empty CSV cells by `download.py`, so the CSV always shows them; values you type yourself are never replaced. Fill them in by hand only when the page can't be downloaded (the loader lists anything still missing).
 2. Download the protocols and panel pages:
    ```
    python src/download.py
@@ -109,12 +109,14 @@ Panel pages: same name with `.html`, in `data/raw/judges/`
 data/
   raw/          protocol PDFs (not in git)
     judges/     panel of judges pages (not in git)
+    index/      results index pages, for the time schedule (not in git)
   processed/    skating.db (not in git)
   reference/    hand-curated data: competitions.csv
 notebooks/      exploration notebook with charts
 queries/        saved SQL queries
 src/
-  download.py       downloads protocols and panel pages
+  download.py       downloads protocols, panel pages and index pages
+  index_parser.py   results index page → segments and time schedule
   parser.py         protocol PDF → Python data
   element_codes.py  element code splitting
   panel_parser.py   panel of judges page → Python data

@@ -3,7 +3,7 @@
 ## Data
 - [x] Add judges' names from the "Panel of Judges" documents (link J1–J9 to real people)
 - [ ] Base value table: import the ISU Scale of Values (one per season) as a reference table, to check printed base values, see how elements are valued across seasons, and calculate values for things like "what if this jump had been fully rotated"
-- [ ] Segment date: read each segment's day and time from the schedule on the results index page (already read by download.py) and store it on `segments`; more reliable than the "printed:" line in the PDF
+- [x] Segment date: read each segment's day and time from the schedule on the results index page (already read by download.py) and store it on `segments`; more reliable than the "printed:" line in the PDF
 - [ ] Nations reference: data/reference/nations.csv mapping each code to the country it represents (e.g. AIN2 → Russia, AIN1 → Belarus), so queries across seasons treat RUS and AIN2 as the same country (needed once pre-2022 seasons are added)
 - [ ] Expand scope: ~~Challenger Series~~ (done), NHK Trophy, Grand Prix Final, Europeans, Four Continents, Worlds
 - [ ] Add previous seasons

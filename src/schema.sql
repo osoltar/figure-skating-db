@@ -7,8 +7,9 @@ CREATE TABLE competitions (
     series      TEXT NOT NULL,              -- 'GP', 'CS', ...
     event_code  TEXT NOT NULL,              -- 'GrandPrixDeFrance' (from the filename)
     name        TEXT,                       -- official name, filled in later
-    city        TEXT,
+    city        TEXT,                       -- from the results index page, or the CSV
     country     TEXT,
+    venue       TEXT,
     start_date  TEXT,                       -- 'YYYY-MM-DD'
     end_date    TEXT,
     UNIQUE (season, series, event_code)
@@ -20,6 +21,9 @@ CREATE TABLE segments (
     competition_id  INTEGER NOT NULL REFERENCES competitions(id),
     category        TEXT NOT NULL,          -- 'M', 'W'
     segment         TEXT NOT NULL,          -- 'SP', 'FS'
+    date            TEXT,                   -- 'YYYY-MM-DD', from the event's time schedule
+    start_time      TEXT,                   -- 'HH:MM', local time
+    utc_offset      TEXT,                   -- '+01:00', time zone of start_time
     source_file     TEXT NOT NULL,
     UNIQUE (competition_id, category, segment)
 );
