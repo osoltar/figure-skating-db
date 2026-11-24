@@ -202,11 +202,17 @@ def load_file(con, path, competitions, fingerprint, missing):
         skater_id = get_or_create(
             con, "skaters", first_name=s["first_name"], last_name=s["last_name"],
         )
+        partner_id = None   # pairs and ice dance: the second person of the team
+        if s.get("partner_last_name"):
+            partner_id = get_or_create(
+                con, "skaters",
+                first_name=s["partner_first_name"], last_name=s["partner_last_name"],
+            )
         performance_id = con.execute(
-            "INSERT INTO performances (segment_id, skater_id, nation, rank, "
+            "INSERT INTO performances (segment_id, skater_id, partner_id, nation, rank, "
             "starting_number, total, tes, pcs, deductions) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (segment_id, skater_id, s["nation"], s["rank"], s["starting_number"],
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (segment_id, skater_id, partner_id, s["nation"], s["rank"], s["starting_number"],
              s["total"], s["tes"], s["pcs"], s["deductions"]),
         ).lastrowid
 
@@ -214,12 +220,14 @@ def load_file(con, path, competitions, fingerprint, missing):
             split = e["split"]
             element_id = con.execute(
                 "INSERT INTO elements (performance_id, number, code, kind, info, fall, "
-                "invalid, flags, base, level, markers, base_value, second_half, goe, "
-                "panel_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "invalid, flags, base, level, level_partner, markers, rotations, jump, "
+                "base_value, second_half, goe, panel_score) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (performance_id, e["number"], e["code"], split["kind"],
                  " ".join(e["info"]), "F" in e["info"], "*" in e["info"],
                  "+".join(split["flags"]), split.get("base"), split.get("level"),
-                 split.get("markers"), e["base_value"], e["second_half"], e["goe"],
+                 split.get("level_partner"), split.get("markers"), split.get("rotations"),
+                 split.get("jump"), e["base_value"], e["second_half"], e["goe"],
                  e["panel_score"]),
             ).lastrowid
 

@@ -19,8 +19,8 @@ CREATE TABLE competitions (
 CREATE TABLE segments (
     id              INTEGER PRIMARY KEY,
     competition_id  INTEGER NOT NULL REFERENCES competitions(id),
-    category        TEXT NOT NULL,          -- 'M', 'W'
-    segment         TEXT NOT NULL,          -- 'SP', 'FS'
+    category        TEXT NOT NULL,          -- 'M', 'W', 'P' (pairs), 'ID' (ice dance)
+    segment         TEXT NOT NULL,          -- 'SP', 'FS'; ice dance 'RD', 'FD'
     date            TEXT,                   -- 'YYYY-MM-DD', from the event's time schedule
     start_time      TEXT,                   -- 'HH:MM', local time
     utc_offset      TEXT,                   -- '+01:00', time zone of start_time
@@ -36,11 +36,12 @@ CREATE TABLE skaters (
     isu_slug    TEXT                        -- 'kevin-aymoz', filled in later
 );
 
--- One skater skating one segment
+-- One skater (or one pair / ice dance team) skating one segment
 CREATE TABLE performances (
     id               INTEGER PRIMARY KEY,
     segment_id       INTEGER NOT NULL REFERENCES segments(id),
-    skater_id        INTEGER NOT NULL REFERENCES skaters(id),
+    skater_id        INTEGER NOT NULL REFERENCES skaters(id),   -- singles skater, or the woman
+    partner_id       INTEGER REFERENCES skaters(id),            -- the man in pairs / ice dance, NULL in singles
     nation           TEXT NOT NULL,         -- nation at the time of this event
     rank             INTEGER NOT NULL,
     starting_number  INTEGER NOT NULL,
@@ -56,14 +57,19 @@ CREATE TABLE elements (
     performance_id  INTEGER NOT NULL REFERENCES performances(id),
     number          INTEGER NOT NULL,       -- order in the program
     code            TEXT NOT NULL,          -- as printed: '3F+3T<'
-    kind            TEXT NOT NULL,          -- 'jump', 'spin', 'step', 'choreo', 'empty', 'unknown'
+    kind            TEXT NOT NULL,          -- 'jump', 'spin', 'step', 'choreo', 'twist', 'throw', 'lift',
+                                            -- 'death_spiral', 'pivot', 'twizzles', 'turns', 'pattern',
+                                            -- 'empty', 'unknown'
     info            TEXT NOT NULL DEFAULT '',  -- Info column as printed: 'F <'
     fall            INTEGER NOT NULL DEFAULT 0,
     invalid         INTEGER NOT NULL DEFAULT 0,
     flags           TEXT NOT NULL DEFAULT '',  -- 'COMBO', 'REP', 'SEQ'
-    base            TEXT,                   -- spins/sequences: 'CCoSp', 'StSq'
-    level           TEXT,                   -- spins/sequences: '4', 'B'
-    markers         TEXT,                   -- spins/sequences: 'V'
+    base            TEXT,                   -- non-jumps: 'CCoSp', 'StSq', 'FiDs', '5RLi', 'CiSt', 'CuLi+RoLi'
+    level           TEXT,                   -- '4', 'B'; ice dance: the woman's level; combined lifts: '4+4'
+    level_partner   TEXT,                   -- ice dance: the man's level, when each partner has one
+    markers         TEXT,                   -- non-jumps: 'V', '<', '*'; pattern dance: key points 'YNYY'
+    rotations       INTEGER,                -- throws and twists: number of rotations
+    jump            TEXT,                   -- throws: jump type ('S', 'Lo', 'F'...)
     base_value      REAL NOT NULL,
     second_half     INTEGER NOT NULL DEFAULT 0,
     goe             REAL,                   -- NULL if no GOE (element not validated)
@@ -134,15 +140,18 @@ CREATE VIEW competition_results AS
 WITH totals AS (
     SELECT c.id AS competition_id, c.season, c.event_code, c.name AS competition,
            s.category, sk.id AS skater_id, sk.first_name, sk.last_name,
+           pa.id AS partner_id, pa.first_name AS partner_first_name,
+           pa.last_name AS partner_last_name,
            MAX(p.nation) AS nation,
-           SUM(CASE WHEN s.segment = 'SP' THEN p.total END) AS sp,
-           SUM(CASE WHEN s.segment = 'FS' THEN p.total END) AS fs,
+           SUM(CASE WHEN s.segment IN ('SP', 'RD') THEN p.total END) AS sp,   -- short program / rhythm dance
+           SUM(CASE WHEN s.segment IN ('FS', 'FD') THEN p.total END) AS fs,   -- free skating / free dance
            ROUND(SUM(p.total), 2) AS total
     FROM performances p
     JOIN segments s     ON p.segment_id = s.id
     JOIN competitions c ON s.competition_id = c.id
     JOIN skaters sk     ON p.skater_id = sk.id
-    GROUP BY c.id, s.category, sk.id
+    LEFT JOIN skaters pa ON p.partner_id = pa.id
+    GROUP BY c.id, s.category, sk.id, pa.id
 )
 SELECT *,
        CASE WHEN fs IS NULL THEN NULL

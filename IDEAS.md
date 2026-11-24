@@ -7,7 +7,8 @@
 - [ ] Nations reference: data/reference/nations.csv mapping each code to the country it represents (e.g. AIN2 → Russia, AIN1 → Belarus), so queries across seasons treat RUS and AIN2 as the same country (needed once pre-2022 seasons are added)
 - [ ] Expand scope: ~~Challenger Series~~ (done), NHK Trophy, Grand Prix Final, Europeans, Four Continents, Worlds
 - [ ] Add previous seasons
-- [ ] Add pairs and ice dance
+- [x] Add pairs and ice dance
+- [ ] Pairs and dance details: pattern dance key points one by one, lift groups and types, each lift of a combined lift, Advanced Novice / junior pattern dance sequences (FO1Sq4...) if lower levels are ever added
 - [ ] Handle old scoring rules (GOE ±3 before 2018, old component names before 2022)
 - [ ] Link skaters to their ISU page (isu-skating.com slug)
 - [ ] Improve skater matching: PDFs have no birth date, so skaters are matched on first + last name for now; add birth date and handle name changes

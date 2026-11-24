@@ -8,9 +8,12 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 # Labels on the results page -> codes used in our filenames.
-# Anything not listed (Pairs, Ice Dance, Junior Men...) is skipped.
-CATEGORIES = {"Men": "M", "Women": "W"}
-SEGMENTS = {"Short Program": "SP", "Free Skating": "FS"}
+# Anything not listed (Junior Men, Junior Pairs, novice categories...) is skipped.
+CATEGORIES = {"Men": "M", "Women": "W", "Pairs": "P", "Ice Dance": "ID"}
+SEGMENTS = {"Short Program": "SP", "Free Skating": "FS",
+            "Rhythm Dance": "RD", "Free Dance": "FD"}
+# Which segments each category has
+CATEGORY_SEGMENTS = {"M": ["SP", "FS"], "W": ["SP", "FS"], "P": ["SP", "FS"], "ID": ["RD", "FD"]}
 
 CATEGORY_LINK_RE = re.compile(r"CAT\d+(EN|RS)\.htm$", re.IGNORECASE)
 SEG_ID_RE = re.compile(r"(SEG\d+)", re.IGNORECASE)        # "SEG003OF.htm" -> "SEG003"

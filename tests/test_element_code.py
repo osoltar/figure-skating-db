@@ -87,3 +87,60 @@ def test_rfe_flag():
     assert result["kind"] == "jump"
     assert result["flags"] == ["SEQ", "RFE"]
     assert [p["markers"] for p in result["parts"]] == ["", "*", "*", "<*"]
+
+# --- Pairs and ice dance (codes from the 2026/27 Scales of Values and real protocols) ---
+
+def test_twist_keeps_rotations_and_level():
+    result = split_code("3Tw3")
+    assert (result["kind"], result["rotations"], result["level"]) == ("twist", 3, "3")
+
+
+@pytest.mark.parametrize("code, rotations, jump, markers", [
+    ("3FTh", 3, "F", ""),
+    ("4STh", 4, "S", ""),
+    ("3LoTh<", 3, "Lo", "<"),
+])
+def test_throw_keeps_type_and_rotations(code, rotations, jump, markers):
+    result = split_code(code)
+    assert result["kind"] == "throw"
+    assert (result["rotations"], result["jump"], result["markers"]) == (rotations, jump, markers)
+    assert result["parts"] == []      # throws are not stored as jumps
+
+
+@pytest.mark.parametrize("code, kind, base, level", [
+    ("5RLi4", "lift", "5RLi", "4"),
+    ("RoLi4", "lift", "RoLi", "4"),
+    ("CuLi4+RoLi4", "lift", "CuLi+RoLi", "4+4"),
+    ("FiDs4", "death_spiral", "FiDs", "4"),
+    ("BoDsB", "death_spiral", "BoDs", "B"),
+    ("PCoSp4V", "spin", "PCoSp", "4"),
+    ("PCoSp", "spin", "PCoSp", None),
+    ("DSp4", "spin", "DSp", "4"),
+    ("ChPSp1", "choreo", "ChPSp", "1"),
+    ("ChPLi", "choreo", "ChPLi", None),
+    ("CDE4", "choreo", "CDE", "4"),
+    ("PiF1", "pivot", "PiF", "1"),
+])
+def test_pair_and_dance_elements(code, kind, base, level):
+    result = split_code(code)
+    assert (result["kind"], result["base"], result["level"]) == (kind, base, level)
+
+
+@pytest.mark.parametrize("code, kind, level, level_partner", [
+    ("CiStW2+CiStM3", "step", "2", "3"),
+    ("SyTwWB+SyTwM4", "twizzles", "B", "4"),
+    ("OFTW1+OFTM2", "turns", "1", "2"),
+])
+def test_dance_elements_with_a_level_per_partner(code, kind, level, level_partner):
+    result = split_code(code)
+    assert (result["kind"], result["level"], result["level_partner"]) == (kind, level, level_partner)
+
+
+def test_pattern_dance_keeps_key_points():
+    result = split_code("1GWB+kpNNNN")
+    assert (result["kind"], result["base"], result["level"], result["markers"]) == (
+        "pattern", "1GW", "B", "NNNN")
+
+
+def test_novice_bonus_marker():
+    assert split_code("3Lz!qb")["parts"][0]["markers"] == "!qb"

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import requests
 
-from index_parser import CATEGORIES, SEGMENTS, find_event_info, find_segments
+from index_parser import CATEGORY_SEGMENTS, find_event_info, find_segments
 
 RAW_DIR = Path("data/raw")
 PANEL_DIR = RAW_DIR / "judges"
@@ -23,6 +23,9 @@ COMPETITIONS_CSV = Path("data/reference/competitions.csv")
 HEADERS = {"User-Agent": "skating-results-db (personal project)"}
 TIMEOUT = 30           # seconds to wait for a server before giving up
 PAUSE = 1.0            # seconds between downloads, to be polite to the servers
+
+# Where to look for a copy when a file can't be downloaded from the event's own site
+BACKUP_SITE = "https://fsresults.info/"
 
 # Competition details copied from the results page into empty cells of competitions.csv
 EVENT_FIELDS = ["city", "country", "venue", "start_date", "end_date"]
@@ -66,8 +69,8 @@ def save(path, data):
 def expected_files(comp):
     """All files we want for a competition, built from the naming convention alone."""
     paths = []
-    for category in CATEGORIES.values():
-        for segment in SEGMENTS.values():
+    for category, segments in CATEGORY_SEGMENTS.items():
+        for segment in segments:
             stem = f"{comp['season']}_{comp['series']}_{comp['event_code']}_{category}_{segment}"
             paths += [RAW_DIR / f"{stem}.pdf", PANEL_DIR / f"{stem}.html"]
     return paths
@@ -102,7 +105,8 @@ def download_competition(session, comp):
         if not missing:
             return 0, len(expected_files(comp)), None
         print(f"{code}: {problem}")
-        return 0, 0, f"{problem}, {len(missing)} files missing"
+        names = "".join(f"\n      {p}" for p in missing)
+        return 0, 0, f"{problem}, {len(missing)} files missing:{names}"
 
     html = decode_html(response)
     # Keep a copy of the index page: the loader reads the segment dates from its schedule
@@ -114,9 +118,10 @@ def download_competition(session, comp):
         print(f"{code}: competitions.csv filled in: {', '.join(filled)}")
 
     segments = find_segments(html, url)
-    if len(segments) != len(CATEGORIES) * len(SEGMENTS):
-        print(f"{code}: WARNING found {len(segments)} segments, "
-              f"expected {len(CATEGORIES) * len(SEGMENTS)}")
+    # Every category on the page should come with both of its segments
+    expected = sum(len(CATEGORY_SEGMENTS[c]) for c in {s["category"] for s in segments})
+    if not segments or len(segments) != expected:
+        print(f"{code}: WARNING found {len(segments)} segments, expected {expected or 'some'}")
 
     downloaded = skipped = failed = 0
     for seg in segments:
@@ -133,7 +138,8 @@ def download_competition(session, comp):
                 r = session.get(file_url, timeout=TIMEOUT)
                 r.raise_for_status()
             except requests.RequestException as err:
-                print(f"  {path.name}: FAILED ({err})")
+                print(f"  {path.name}: FAILED ({err})\n"
+                      f"    -> look for a copy on {BACKUP_SITE} and save it as {path}")
                 failed += 1
                 continue
             save(path, decode_html(r) if kind == "html" else r.content)
@@ -144,8 +150,8 @@ def download_competition(session, comp):
     problem = None
     if failed:
         problem = f"{failed} file(s) failed to download"
-    elif len(segments) != len(CATEGORIES) * len(SEGMENTS):
-        problem = f"found {len(segments)} segments instead of {len(CATEGORIES) * len(SEGMENTS)}"
+    elif not segments or len(segments) != expected:
+        problem = f"found {len(segments)} segments instead of {expected or 'some'}"
     return downloaded, skipped, problem
 
 
@@ -204,6 +210,9 @@ def main():
         print("\nDownload manually / check:")
         for code, problem in to_check:
             print(f"  - {code}: {problem}")
+        print(f"\nBackup source for missing files: {BACKUP_SITE}\n"
+              f"Save them with the usual names (see README, File naming); "
+              f"the next run of download.py will skip them.")
 
 
 if __name__ == "__main__":

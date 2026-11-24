@@ -90,3 +90,15 @@ def test_wrong_tes_is_reported(skater):
     skater["tes"] = 50.00
     problems = check_skater(skater)
     assert any("TES" in p for p in problems)
+
+def test_pair_team_is_split_into_two_people():
+    s = parse_skater(SKATER_RE.match(
+        "1 Anastasiia METELKINA / Luka BERULAVA GEO 8 127.31 59.95 68.36 -1.00"))
+    assert (s["first_name"], s["last_name"]) == ("Anastasiia", "METELKINA")
+    assert (s["partner_first_name"], s["partner_last_name"]) == ("Luka", "BERULAVA")
+    assert s["deductions"] == -1.00
+
+
+def test_singles_skater_has_no_partner():
+    s = parse_skater(SKATER_RE.match(SKATER_LINE))
+    assert s["partner_first_name"] is None and s["partner_last_name"] is None

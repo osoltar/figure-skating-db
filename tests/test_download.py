@@ -38,10 +38,10 @@ INDEX_HTML = """
 """
 
 
-def test_finds_senior_singles_segments_only():
+def test_finds_senior_segments_and_skips_junior():
     segments = find_segments(INDEX_HTML, "https://example.org/event/index.htm")
     assert [(s["category"], s["segment"]) for s in segments] == [
-        ("M", "SP"), ("M", "FS"), ("W", "SP"), ("W", "FS"),
+        ("M", "SP"), ("M", "FS"), ("W", "SP"), ("W", "FS"), ("ID", "RD"),
     ]
 
 
@@ -62,7 +62,7 @@ def test_page_without_segments():
 
 def test_segments_know_their_number():
     segments = find_segments(INDEX_HTML, "https://example.org/event/index.htm")
-    assert [s["seg_id"] for s in segments] == ["SEG001", "SEG002", "SEG003", "SEG004"]
+    assert [s["seg_id"] for s in segments] == ["SEG001", "SEG002", "SEG003", "SEG004", "SEG007"]
 
 
 # The time schedule part of a real index page (same structure, fewer rows)

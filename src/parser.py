@@ -27,15 +27,30 @@ def read_lines(path):
     return lines
 
 
-def parse_skater(match):
-    """Turn a SKATER_RE match into a dictionary."""
-    rank, name, nation, start_no, total, tes, pcs, ded = match.groups()
+def split_name(name):
+    """'Anastasiia METELKINA' -> ('Anastasiia', 'METELKINA'): last name is in capitals."""
     parts = name.split()
+    return (" ".join(p for p in parts if not p.isupper()),
+            " ".join(p for p in parts if p.isupper()))
+
+
+def parse_skater(match):
+    """Turn a SKATER_RE match into a dictionary.
+
+    Pairs and ice dance teams are printed as 'Firstname LASTNAME / Firstname LASTNAME':
+    the first person goes in first_name/last_name, the second in partner_first_name/
+    partner_last_name (None for singles)."""
+    rank, name, nation, start_no, total, tes, pcs, ded = match.groups()
+    people = [person.strip() for person in name.split(" / ")]
+    first_name, last_name = split_name(people[0])
+    partner_first, partner_last = split_name(people[1]) if len(people) > 1 else (None, None)
     return {
         "rank": int(rank),
         "name": name,
-        "first_name": " ".join(p for p in parts if not p.isupper()),
-        "last_name": " ".join(p for p in parts if p.isupper()),
+        "first_name": first_name,
+        "last_name": last_name,
+        "partner_first_name": partner_first,
+        "partner_last_name": partner_last,
         "nation": nation,
         "starting_number": int(start_no),
         "total": float(total),
