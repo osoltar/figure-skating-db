@@ -1,5 +1,8 @@
 import csv
+import hashlib
+import json
 import sqlite3
+import time
 from pathlib import Path
 
 from create_db import create_db, DB_PATH
@@ -8,6 +11,35 @@ from panel_parser import parse_panel
 
 RAW_DIR = Path("data/raw")
 REFERENCE_DIR = Path("data/reference")
+CACHE_DIR = Path("data/processed/parsed")
+# If any of these files change, every cached result is outdated
+PARSER_FILES = [Path("src/parser.py"), Path("src/element_codes.py")]
+
+
+def parser_fingerprint():
+    """A short code that changes whenever the parser's source code changes."""
+    h = hashlib.sha256()
+    for path in PARSER_FILES:
+        h.update(path.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def parse_cached(path, fingerprint):
+    """Parse a PDF, or reuse the saved result from a previous run.
+
+    The saved result is reused only if it was made by the same parser code
+    and is newer than the PDF. Returns (skaters, came_from_cache).
+    """
+    cache = CACHE_DIR / (path.stem + ".json")
+    if cache.exists() and cache.stat().st_mtime >= path.stat().st_mtime:
+        data = json.loads(cache.read_text(encoding="utf-8"))
+        if data.get("parser") == fingerprint:
+            return data["skaters"], True
+
+    skaters = parse(path)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps({"parser": fingerprint, "skaters": skaters}), encoding="utf-8")
+    return skaters, False
 
 def read_competitions():
     """Read competitions.csv into a dictionary keyed by (season, series, event_code)."""
@@ -46,7 +78,7 @@ def get_or_create(con, table, **values):
     return cur.lastrowid
 
 
-def load_file(con, path, competitions):
+def load_file(con, path, competitions, fingerprint):
     """Parse one PDF and insert everything into the database."""
     meta = parse_filename(path)
 
@@ -84,7 +116,7 @@ def load_file(con, path, competitions):
             )
     else:
         print(f"  WARNING {path.name}: no panel file {panel_path.name}")
-    skaters = parse(path)
+    skaters, cached = parse_cached(path, fingerprint)
     for s in skaters:
         for problem in check_skater(s):
             print(f"  WARNING {path.name} | {s['name']}: {problem}")
@@ -157,19 +189,31 @@ def load_file(con, path, competitions):
                 [(component_id, j, mark) for j, mark in enumerate(c["judges"], start=1)],
             )
 
-    return len(skaters)
+    return len(skaters), cached
 
 
 def main():
+    start_all = time.perf_counter()
     create_db()
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
     competitions = read_competitions()
+    fingerprint = parser_fingerprint()
+    n_cached = n_parsed = 0
     for path in sorted(RAW_DIR.glob("*.pdf")):
+        start = time.perf_counter()
         with con:
-            n = load_file(con, path, competitions)
-        print(f"{path.name}: {n} skaters loaded")
+            n, cached = load_file(con, path, competitions, fingerprint)
+        seconds = time.perf_counter() - start
+        source = "cache" if cached else "parsed"
+        print(f"{path.name}: {n} skaters loaded ({source}, {seconds:.2f}s)")
+        if cached:
+            n_cached += 1
+        else:
+            n_parsed += 1
     con.close()
+    print(f"\n{n_parsed} PDFs parsed, {n_cached} from cache, "
+          f"total {time.perf_counter() - start_all:.1f}s")
 
 
 if __name__ == "__main__":
