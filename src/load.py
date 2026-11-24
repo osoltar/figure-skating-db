@@ -10,6 +10,7 @@ from create_db import create_db, DB_PATH
 from index_parser import find_event_info, find_schedule, find_segments
 from parser import parse, check_skater
 from panel_parser import parse_panel
+from sov_parser import parse_sov
 
 RAW_DIR = Path("data/raw")
 INDEX_DIR = RAW_DIR / "index"
@@ -19,19 +20,24 @@ CACHE_DIR = Path("data/processed/parsed")
 PARSER_FILES = [Path("src/parser.py"), Path("src/element_codes.py")]
 
 
-def parser_fingerprint():
-    """A short code that changes whenever the parser's source code changes."""
+SOV_DIR = RAW_DIR / "sov"
+SOV_PARSER_FILES = [Path("src/sov_parser.py")]
+
+
+def parser_fingerprint(files=PARSER_FILES):
+    """A short code that changes whenever the given source files change."""
     h = hashlib.sha256()
-    for path in PARSER_FILES:
+    for path in files:
         h.update(path.read_bytes())
     return h.hexdigest()[:16]
 
 
-def parse_cached(path, fingerprint):
+def parse_cached(path, fingerprint, parse_function=parse):
     """Parse a PDF, or reuse the saved result from a previous run.
 
     The saved result is reused only if it was made by the same parser code
-    and is newer than the PDF. Returns (skaters, came_from_cache).
+    and is newer than the PDF. Returns (result, came_from_cache).
+    Works for protocols (parse) and for Scales of Values (parse_sov).
     """
     cache = CACHE_DIR / (path.stem + ".json")
     if cache.exists() and cache.stat().st_mtime >= path.stat().st_mtime:
@@ -39,10 +45,29 @@ def parse_cached(path, fingerprint):
         if data.get("parser") == fingerprint:
             return data["skaters"], True
 
-    skaters = parse(path)
+    result = parse_function(path)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps({"parser": fingerprint, "skaters": skaters}), encoding="utf-8")
-    return skaters, False
+    cache.write_text(json.dumps({"parser": fingerprint, "skaters": result}), encoding="utf-8")
+    return result, False
+
+
+def load_scale_of_values(con):
+    """Load every Scale of Values PDF in data/raw/sov, e.g. 26-27_SOV_SinglesPairs.pdf."""
+    fingerprint = parser_fingerprint(SOV_PARSER_FILES)
+    for path in sorted(SOV_DIR.glob("*.pdf")):
+        season, _, discipline = path.stem.split("_")
+        rows, cached = parse_cached(path, fingerprint, parse_sov)
+        with con:
+            con.executemany(
+                "INSERT INTO scale_of_values (season, discipline, code, base_value, "
+                "goe_m5, goe_m4, goe_m3, goe_m2, goe_m1, goe_p1, goe_p2, goe_p3, goe_p4, goe_p5, "
+                "source_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(season, discipline, r["code"], r["base_value"],
+                  r["goe_m5"], r["goe_m4"], r["goe_m3"], r["goe_m2"], r["goe_m1"],
+                  r["goe_p1"], r["goe_p2"], r["goe_p3"], r["goe_p4"], r["goe_p5"],
+                  path.name) for r in rows],
+            )
+        print(f"{path.name}: {len(rows)} element codes loaded ({'cache' if cached else 'parsed'})")
 
 
 EVENT_FIELDS = ["city", "country", "venue", "start_date", "end_date"]
@@ -220,13 +245,14 @@ def load_file(con, path, competitions, fingerprint, missing):
             split = e["split"]
             element_id = con.execute(
                 "INSERT INTO elements (performance_id, number, code, kind, info, fall, "
-                "invalid, flags, base, level, level_partner, markers, rotations, jump, "
+                "invalid, flags, base, level, level_partner, markers, key_points, rotations, jump, "
                 "base_value, second_half, goe, panel_score) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (performance_id, e["number"], e["code"], split["kind"],
                  " ".join(e["info"]), "F" in e["info"], "*" in e["info"],
                  "+".join(split["flags"]), split.get("base"), split.get("level"),
-                 split.get("level_partner"), split.get("markers"), split.get("rotations"),
+                 split.get("level_partner"), split.get("markers"), split.get("key_points"),
+                 split.get("rotations"),
                  split.get("jump"), e["base_value"], e["second_half"], e["goe"],
                  e["panel_score"]),
             ).lastrowid
@@ -267,6 +293,7 @@ def main():
     create_db()
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
+    load_scale_of_values(con)
     competitions = read_competitions()
     fingerprint = parser_fingerprint()
     n_cached = n_parsed = 0

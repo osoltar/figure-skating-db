@@ -4,6 +4,7 @@ data/processed/*.db
 data/processed/parsed/
 data/raw/judges
 data/raw/index
+data/raw/sov
 
 # Python clutter
 __pycache__/

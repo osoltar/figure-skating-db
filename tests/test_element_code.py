@@ -136,10 +136,34 @@ def test_dance_elements_with_a_level_per_partner(code, kind, level, level_partne
     assert (result["kind"], result["level"], result["level_partner"]) == (kind, level, level_partner)
 
 
-def test_pattern_dance_keeps_key_points():
-    result = split_code("1GWB+kpNNNN")
-    assert (result["kind"], result["base"], result["level"], result["markers"]) == (
-        "pattern", "1GW", "B", "NNNN")
+@pytest.mark.parametrize("code, level, key_points, markers", [
+    ("1GWB+kpNNNN", "B", "NNNN", ""),
+    ("1GW3+kpYNYY", "3", "YNYY", ""),
+    ("1GWB+kpYYNN<<", "B", "YYNN", "<<"),
+    ("1GWB+kpXNNN<", "B", "XNNN", "<"),
+])
+def test_pattern_dance_key_points(code, level, key_points, markers):
+    result = split_code(code)
+    assert (result["kind"], result["base"]) == ("pattern", "1GW")
+    assert (result["level"], result["key_points"], result["markers"]) == (level, key_points, markers)
+
+
+@pytest.mark.parametrize("code, kind, level, level_partner", [
+    ("SyTwW+SyTwM3", "twizzles", None, "3"),
+    ("OFTW1+OFTM", "turns", "1", None),
+])
+def test_partner_without_level(code, kind, level, level_partner):
+    result = split_code(code)
+    assert (result["kind"], result["level"], result["level_partner"]) == (kind, level, level_partner)
+
+
+@pytest.mark.parametrize("code, kind, base", [
+    ("StaLi+ExEl", "lift", "StaLi"),
+    ("CDE4+ExEl", "choreo", "CDE"),
+])
+def test_extra_element_flag(code, kind, base):
+    result = split_code(code)
+    assert (result["kind"], result["base"], result["flags"]) == (kind, base, ["ExEl"])
 
 
 def test_novice_bonus_marker():

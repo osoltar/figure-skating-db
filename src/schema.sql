@@ -63,11 +63,12 @@ CREATE TABLE elements (
     info            TEXT NOT NULL DEFAULT '',  -- Info column as printed: 'F <'
     fall            INTEGER NOT NULL DEFAULT 0,
     invalid         INTEGER NOT NULL DEFAULT 0,
-    flags           TEXT NOT NULL DEFAULT '',  -- 'COMBO', 'REP', 'SEQ'
+    flags           TEXT NOT NULL DEFAULT '',  -- 'COMBO', 'REP', 'SEQ', 'RFE', 'ExEl'
     base            TEXT,                   -- non-jumps: 'CCoSp', 'StSq', 'FiDs', '5RLi', 'CiSt', 'CuLi+RoLi'
     level           TEXT,                   -- '4', 'B'; ice dance: the woman's level; combined lifts: '4+4'
     level_partner   TEXT,                   -- ice dance: the man's level, when each partner has one
-    markers         TEXT,                   -- non-jumps: 'V', '<', '*'; pattern dance: key points 'YNYY'
+    markers         TEXT,                   -- non-jumps: 'V', '<', '<<', '*'
+    key_points      TEXT,                   -- pattern dance: one letter per key point, 'YNYY'
     rotations       INTEGER,                -- throws and twists: number of rotations
     jump            TEXT,                   -- throws: jump type ('S', 'Lo', 'F'...)
     base_value      REAL NOT NULL,
@@ -133,6 +134,20 @@ CREATE TABLE panel (
     nation        TEXT NOT NULL,     -- nation at that event ('ISU' for the technical panel)
     UNIQUE (segment_id, role, official_id),
     UNIQUE (segment_id, judge_number)
+);
+
+-- ISU Scale of Values: base value and GOE in points for every element code, per season.
+-- One document for singles + pairs and one for ice dance; a code can be in both with
+-- different values (e.g. ChSp1), hence the discipline in the key.
+CREATE TABLE scale_of_values (
+    season      TEXT NOT NULL,              -- '26-27'
+    discipline  TEXT NOT NULL,              -- 'SinglesPairs' or 'IceDance'
+    code        TEXT NOT NULL,              -- as in the SOV: '3Lz', '2F!<', 'CCoSp4V', 'CiStW3'
+    base_value  REAL NOT NULL,
+    goe_m5 REAL, goe_m4 REAL, goe_m3 REAL, goe_m2 REAL, goe_m1 REAL,   -- GOE -5 .. -1 in points
+    goe_p1 REAL, goe_p2 REAL, goe_p3 REAL, goe_p4 REAL, goe_p5 REAL,   -- GOE +1 .. +5 in points
+    source_file TEXT NOT NULL,
+    PRIMARY KEY (season, discipline, code)
 );
 
 -- Overall results per competition and category: SP + FS combined, with rank

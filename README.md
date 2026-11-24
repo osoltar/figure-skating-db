@@ -44,6 +44,7 @@ The downloaded files are the source of truth: the database is never edited by ha
 | `component_judge_scores` | judge's mark for a component |
 | `officials` | judge, technical panel member or referee |
 | `panel` | official's role in a segment (judge number 1–9 for judges) and nation at that event |
+| `scale_of_values` | element code in the ISU Scale of Values of a season: base value and GOE −5..+5 in points |
 
 The view `competition_results` combines short program and free skating (or rhythm and free dance) into overall results with ranks.
 
@@ -64,6 +65,7 @@ Saved in [`queries/`](queries/):
 - men's triple Axel GOE ranking
 - most used jumps in women's programs
 - judges' GOE compared with the rest of the panel, including for skaters from their own country
+- printed base values checked against the Scale of Values
 
 Charts are in [`notebooks/exploration.ipynb`](notebooks/exploration.ipynb).
 
@@ -85,6 +87,7 @@ pip install -r requirements.txt
    ```
    python src/load.py
    ```
+   The ISU Scales of Values of the season go in `data/raw/sov/` as `<season>_SOV_SinglesPairs.pdf` and `<season>_SOV_IceDance.pdf` (ISU Communications, e.g. 2786 and 2803 for 2026/27; US Figure Skating's rules pages host copies).
 4. Open `data/processed/skating.db` with any SQLite tool (e.g. DB Browser for SQLite), run the queries in `queries/`, or open the notebook.
 
 Run the tests with:
@@ -112,6 +115,7 @@ data/
   raw/          protocol PDFs (not in git)
     judges/     panel of judges pages (not in git)
     index/      results index pages, for the time schedule (not in git)
+    sov/        ISU Scales of Values, e.g. 26-27_SOV_SinglesPairs.pdf (not in git)
   processed/    skating.db (not in git)
   reference/    hand-curated data: competitions.csv
 notebooks/      exploration notebook with charts
@@ -122,6 +126,7 @@ src/
   parser.py         protocol PDF → Python data
   element_codes.py  element code splitting
   panel_parser.py   panel of judges page → Python data
+  sov_parser.py     Scale of Values PDF → base value and GOE per element code
   schema.sql        tables and views
   create_db.py      creates an empty database
   load.py           builds the database from all files
