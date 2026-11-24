@@ -67,8 +67,11 @@ def load_file(con, path, competitions):
         (competition_id, meta["category"], meta["segment"], path.name),
     ).lastrowid
     panel_path = RAW_DIR / "judges" / (path.stem + ".html")
+    panel_judges = None   # judge numbers on the panel page, if there is one
     if panel_path.exists():
-        for member in parse_panel(panel_path):
+        panel = parse_panel(panel_path)
+        panel_judges = sorted(m["judge_number"] for m in panel if m["role"] == "Judge")
+        for member in panel:
             official_id = get_or_create(
                 con, "officials",
                 first_name=member["first_name"], last_name=member["last_name"],
@@ -88,6 +91,19 @@ def load_file(con, path, competitions):
     ranks = sorted(s["rank"] for s in skaters)
     if ranks != list(range(1, len(skaters) + 1)):
         print(f"  WARNING {path.name}: ranks are not 1..{len(skaters)}: {ranks}")
+
+    # Judge count: panel page vs judge columns in the scores
+    if panel_judges is not None:
+        score_columns = {len(x["judges"]) for s in skaters
+                         for x in s["elements"] + s["components"]}
+        if len(score_columns) != 1:
+            print(f"  WARNING {path.name}: score lines have different numbers "
+                  f"of judges: {sorted(score_columns)}")
+        n_scores = max(score_columns, default=0)
+        if panel_judges != list(range(1, n_scores + 1)):
+            print(f"  WARNING {path.name}: panel lists judges {panel_judges} "
+                  f"but scores have {n_scores} judge columns")
+
     for s in skaters:
         skater_id = get_or_create(
             con, "skaters", first_name=s["first_name"], last_name=s["last_name"],
