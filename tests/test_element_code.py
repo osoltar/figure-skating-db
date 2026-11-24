@@ -52,6 +52,38 @@ def test_empty_slot():
     assert split_code("")["kind"] == "empty"
 
 
-@pytest.mark.parametrize("code", ["XYZ", "T", "3X"])
+@pytest.mark.parametrize("code", ["XYZ", "3X", "5"])
 def test_unrecognised_codes(code):
     assert split_code(code)["kind"] == "unknown"
+
+
+# Attempted jumps (TP Handbook 2026/27, p. 31): printed without a number of
+# revolutions, no value. Stored as 0 rotations.
+@pytest.mark.parametrize("code, jump, markers", [
+    ("A", "A", ""),
+    ("T", "T", ""),
+    ("A*", "A", "*"),
+    ("Lo*", "Lo", "*"),
+])
+def test_attempted_jump(code, jump, markers):
+    result = split_code(code)
+    assert result["kind"] == "jump"
+    assert result["parts"] == [{"position": 1, "rotations": 0, "jump": jump, "markers": markers}]
+
+
+def test_attempted_jump_inside_sequence():
+    result = split_code("3Lo<+1A+A+SEQ")
+    assert result["flags"] == ["SEQ"]
+    assert [(p["rotations"], p["jump"]) for p in result["parts"]] == [(3, "Lo"), (1, "A"), (0, "A")]
+
+
+def test_euler_still_counts_as_one_rotation():
+    parts = split_code("3S+Eu+2S+A+SEQ")["parts"]
+    assert [(p["rotations"], p["jump"]) for p in parts] == [(3, "S"), (1, "Eu"), (2, "S"), (0, "A")]
+
+
+def test_rfe_flag():
+    result = split_code("1A+2A*+Eu*+3S<*+SEQ+RFE")
+    assert result["kind"] == "jump"
+    assert result["flags"] == ["SEQ", "RFE"]
+    assert [p["markers"] for p in result["parts"]] == ["", "*", "*", "<*"]

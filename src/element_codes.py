@@ -8,7 +8,7 @@ JUMP_RE = re.compile(
 OTHER_RE = re.compile(
     r"^(?P<base>[A-Za-z]*?(?:Sp|Sq))(?P<level>B|\d)?(?P<markers>[V*]*)$"
 )
-FLAGS = {"COMBO", "REP", "SEQ"}
+FLAGS = {"COMBO", "REP", "SEQ", "RFE"}   # RFE: meaning not documented yet, kept as printed
 
 
 def split_code(code):
@@ -47,6 +47,8 @@ def split_code(code):
     pieces = code.split("+")
     flags = [p for p in pieces if p in FLAGS]
     jumps = [p for p in pieces if p not in FLAGS]
+    if not jumps:
+        return {"kind": "unknown", "flags": flags, "parts": [], "code": code}
 
     parts = []
     for position, piece in enumerate(jumps, start=1):
@@ -55,9 +57,10 @@ def split_code(code):
             return {"kind": "unknown", "flags": flags, "parts": [], "code": code}
         rotations = match.group("rotations")
         if rotations is None:
-            if match.group("jump") != "Eu":
-                return {"kind": "unknown", "flags": flags, "parts": [], "code": code}
-            rotations = 1   # Euler is printed without a number
+            if match.group("jump") == "Eu":
+                rotations = 1   # Euler is printed without a number
+            else:
+                rotations = 0   # attempted jump: no value (TP Handbook 2026/27, p. 31)
         parts.append({
             "position": position,
             "rotations": int(rotations),
