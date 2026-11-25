@@ -245,13 +245,15 @@ def load_file(con, path, competitions, fingerprint, missing):
             split = e["split"]
             element_id = con.execute(
                 "INSERT INTO elements (performance_id, number, code, kind, info, fall, "
-                "invalid, flags, base, level, level_partner, markers, key_points, rotations, jump, "
+                "invalid, flags, base, level, level_partner, markers, markers_partner, key_points, "
+                "rotations, jump, "
                 "base_value, second_half, goe, panel_score) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (performance_id, e["number"], e["code"], split["kind"],
-                 " ".join(e["info"]), "F" in e["info"], "*" in e["info"],
+                 " ".join(e["info"]), any(i in ("F", "Fx") for i in e["info"]), "*" in e["info"],
                  "+".join(split["flags"]), split.get("base"), split.get("level"),
-                 split.get("level_partner"), split.get("markers"), split.get("key_points"),
+                 split.get("level_partner"), split.get("markers"), split.get("markers_partner"),
+                 split.get("key_points"),
                  split.get("rotations"),
                  split.get("jump"), e["base_value"], e["second_half"], e["goe"],
                  e["panel_score"]),

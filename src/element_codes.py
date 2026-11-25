@@ -2,17 +2,19 @@ import re
 
 # --- Singles (and side-by-side jumps in pairs) --------------------------------
 # A single jump, e.g. "4T", "3Lz!", "3A<", "4Tq", "1Lz!*", "2A<<"
-# ("b" = bonus, Advanced Novice only)
+# ("b" = bonus, Advanced Novice only; "vb" = variety bonus, novice only)
 JUMP_RE = re.compile(
-    r"^(?P<rotations>\d)?(?P<jump>Lz|Lo|Eu|A|F|S|T)(?P<markers>[<q!e*b]*)$"
+    r"^(?P<rotations>\d)?(?P<jump>Lz|Lo|Eu|A|F|S|T)(?P<markers>[<q!e*bv]*)$"
 )
 # Spins and sequences, e.g. "CCoSp4", "FCSpB", "CSSp3V", "StSq4", "PCoSp4V", "DSp4", "PCoSp"
 OTHER_RE = re.compile(
     r"^(?P<base>[A-Za-z]*?(?:Sp|Sq))(?P<level>B|\d)?(?P<markers>[V*]*)$"
 )
-# Choreographic elements, e.g. "ChSq1", "ChPLi1", "ChPSp1", "ChAJ1", "ChSl1", "ChPLi"
-# CDE (rhythm dance): Choreographic Dance Element
-CHOREO_RE = re.compile(r"^(?P<base>Ch[A-Za-z]+|CDE)(?P<level>[1-4B])?(?P<markers>[*]*)$")
+# Choreographic elements, e.g. "ChSq1", "ChPLi1", "ChPSp1", "ChAJ1", "ChSl1", "ChRS1", "ChPLi"
+# ("e" in ice dance: identified but not fulfilling all requirements)
+CHOREO_RE = re.compile(r"^(?P<base>Ch[A-Za-z]+)(?P<level>[1-4B])?(?P<markers>[*e]*)$")
+# Creative Dance Element (rhythm dance, seniors), e.g. "CDE4"
+CREATIVE_RE = re.compile(r"^(?P<base>CDE)(?P<level>[1-4B])?(?P<markers>[*e]*)$")
 
 # --- Pairs ---------------------------------------------------------------------
 # Twist lift, e.g. "3Tw3": rotations, then level
@@ -27,14 +29,16 @@ DEATH_SPIRAL_RE = re.compile(r"^(?P<base>(?:Fi|Bi|Fo|Bo)Ds)(?P<level>[1-4B])?(?P
 PIVOT_RE = re.compile(r"^(?P<base>PiF)(?P<level>[1-4B])?(?P<markers>[*]*)$")
 
 # --- Pairs and ice dance -------------------------------------------------------
-# Lift, e.g. pairs "3Li4", "5RLi4", "5ALi3"; dance "RoLi4", "StaLi4", "CuLi3"
-LIFT_RE = re.compile(r"^(?P<base>\d?[A-Za-z]*Li)(?P<level>[1-4B])?(?P<markers>[*]*)$")
+# Lift, e.g. pairs "3Li4", "5RLi4", "5ALi3"; dance "RoLi4", "StaLi4", "CuLi3", "RoLi4>" (extended)
+LIFT_RE = re.compile(r"^(?P<base>\d?[A-Za-z]*Li)(?P<level>[1-4B])?(?P<markers>[*>]*)$")
 
 # --- Ice dance -----------------------------------------------------------------
 # One level per partner, e.g. "CiStW2+CiStM3", "SyTwWB+SyTwM4", "OFTW1+OFTM2".
 # A partner can have no level at all: "SyTwW+SyTwM3", "OFTW1+OFTM".
+# Each partner can have signs: "S" (-1 level, separation/contact), "*", "<": "SqTwW3S+SqTwM4"
 PARTNER_RE = re.compile(
-    r"^(?P<base>[A-Za-z]+?)W(?P<level>[1-4B])?\+(?P=base)M(?P<level_partner>[1-4B])?(?P<markers>[*]*)$"
+    r"^(?P<base>[A-Za-z]+?)W(?P<level>[1-4B])?(?P<markers>[S*<]*)"
+    r"\+(?P=base)M(?P<level_partner>[1-4B])?(?P<markers_partner>[S*<]*)$"
 )
 # Pattern dance with key points, e.g. "1GW3+kpYNYY", "1GWB+kpYYNN<<", "1GWB+kpXNNN<":
 # one letter per key point (Y, N, X...), then possibly signs like "<" or "<<"
@@ -48,13 +52,14 @@ FLAGS = {"COMBO", "REP", "SEQ", "RFE", "ExEl"}
 
 
 def element(kind, base=None, level=None, markers="", level_partner=None,
-            rotations=None, jump=None, flags=None, parts=None, key_points=None):
+            rotations=None, jump=None, flags=None, parts=None, key_points=None,
+            markers_partner=None):
     """The dictionary returned by split_code, with every key always present."""
     return {
         "kind": kind, "flags": flags or [], "parts": parts or [],
         "base": base, "level": level, "level_partner": level_partner,
         "markers": markers, "rotations": rotations, "jump": jump,
-        "key_points": key_points,
+        "key_points": key_points, "markers_partner": markers_partner,
     }
 
 
@@ -71,12 +76,13 @@ def split_code(code):
     """Split an element code into its parts.
 
     Returns a dictionary (see element()):
-      kind:  "jump", "spin", "step", "choreo", "twist", "throw", "lift",
+      kind:  "jump", "spin", "step", "choreo", "creative", "twist", "throw", "lift",
              "death_spiral", "pivot", "twizzles", "turns", "pattern", "empty" or "unknown"
       flags: e.g. ["COMBO"]
       parts: for jumps, one entry per jump in the element
       base / level / markers: for everything else
-      level_partner: ice dance, the man's level when each partner has one
+      level_partner / markers_partner: ice dance, the man's level and signs when each
+                                       partner has their own
       rotations / jump: throws (rotations + jump type) and twists (rotations)
       key_points: pattern dance, one letter per key point ("YNYY")
     """
@@ -91,9 +97,10 @@ def split_code(code):
     core = "+".join(p for p in pieces if p not in FLAGS)
 
     # Choreographic elements (checked first: "ChPSp1" must not count as a spin)
-    match = CHOREO_RE.match(core)
-    if match:
-        return element("choreo", match["base"], match["level"], match["markers"], flags=flags)
+    for kind, pattern in [("choreo", CHOREO_RE), ("creative", CREATIVE_RE)]:
+        match = pattern.match(core)
+        if match:
+            return element(kind, match["base"], match["level"], match["markers"], flags=flags)
 
     # Spins and step sequences: a single piece, no "+"
     match = OTHER_RE.match(core)
@@ -118,7 +125,8 @@ def split_code(code):
     match = PARTNER_RE.match(core)
     if match:
         return element(partner_kind(match["base"]), match["base"], match["level"],
-                       match["markers"], level_partner=match["level_partner"], flags=flags)
+                       match["markers"], level_partner=match["level_partner"],
+                       markers_partner=match["markers_partner"], flags=flags)
 
     match = PATTERN_RE.match(core)
     if match:

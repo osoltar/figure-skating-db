@@ -57,16 +57,17 @@ CREATE TABLE elements (
     performance_id  INTEGER NOT NULL REFERENCES performances(id),
     number          INTEGER NOT NULL,       -- order in the program
     code            TEXT NOT NULL,          -- as printed: '3F+3T<'
-    kind            TEXT NOT NULL,          -- 'jump', 'spin', 'step', 'choreo', 'twist', 'throw', 'lift',
+    kind            TEXT NOT NULL,          -- 'jump', 'spin', 'step', 'choreo', 'creative', 'twist', 'throw', 'lift',
                                             -- 'death_spiral', 'pivot', 'twizzles', 'turns', 'pattern',
                                             -- 'empty', 'unknown'
     info            TEXT NOT NULL DEFAULT '',  -- Info column as printed: 'F <'
-    fall            INTEGER NOT NULL DEFAULT 0,
+    fall            INTEGER NOT NULL DEFAULT 0,   -- F or Fx (multiple falls) in Info
     invalid         INTEGER NOT NULL DEFAULT 0,
     flags           TEXT NOT NULL DEFAULT '',  -- 'COMBO', 'REP', 'SEQ', 'RFE', 'ExEl'
     base            TEXT,                   -- non-jumps: 'CCoSp', 'StSq', 'FiDs', '5RLi', 'CiSt', 'CuLi+RoLi'
     level           TEXT,                   -- '4', 'B'; ice dance: the woman's level; combined lifts: '4+4'
     level_partner   TEXT,                   -- ice dance: the man's level, when each partner has one
+    markers_partner TEXT,                   -- ice dance: the man's signs ('S', '*'), same elements
     markers         TEXT,                   -- non-jumps: 'V', '<', '<<', '*'
     key_points      TEXT,                   -- pattern dance: one letter per key point, 'YNYY'
     rotations       INTEGER,                -- throws and twists: number of rotations

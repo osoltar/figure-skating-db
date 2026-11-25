@@ -118,7 +118,7 @@ def test_throw_keeps_type_and_rotations(code, rotations, jump, markers):
     ("DSp4", "spin", "DSp", "4"),
     ("ChPSp1", "choreo", "ChPSp", "1"),
     ("ChPLi", "choreo", "ChPLi", None),
-    ("CDE4", "choreo", "CDE", "4"),
+    ("CDE4", "creative", "CDE", "4"),
     ("PiF1", "pivot", "PiF", "1"),
 ])
 def test_pair_and_dance_elements(code, kind, base, level):
@@ -159,7 +159,7 @@ def test_partner_without_level(code, kind, level, level_partner):
 
 @pytest.mark.parametrize("code, kind, base", [
     ("StaLi+ExEl", "lift", "StaLi"),
-    ("CDE4+ExEl", "choreo", "CDE"),
+    ("CDE4+ExEl", "creative", "CDE"),
 ])
 def test_extra_element_flag(code, kind, base):
     result = split_code(code)
@@ -168,3 +168,27 @@ def test_extra_element_flag(code, kind, base):
 
 def test_novice_bonus_marker():
     assert split_code("3Lz!qb")["parts"][0]["markers"] == "!qb"
+
+
+# --- Signs from the ISU element abbreviation list 2026/27 ---
+
+@pytest.mark.parametrize("code, markers", [
+    ("ChSl1e", "e"),      # choreo element identified, requirements not fulfilled
+    ("RoLi4>", ">"),      # extended lift
+])
+def test_dance_element_signs(code, markers):
+    assert split_code(code)["markers"] == markers
+
+
+def test_variety_bonus_marker():
+    assert split_code("2Avb")["parts"][0]["markers"] == "vb"
+
+
+@pytest.mark.parametrize("code, markers, markers_partner", [
+    ("SqTwW3S+SqTwM4", "S", ""),     # S = -1 level for separation/contact, woman
+    ("SyTwW4+SyTwM3S", "", "S"),     # ... man
+    ("CiStW2*+CiStM2*", "*", "*"),
+])
+def test_signs_per_partner(code, markers, markers_partner):
+    result = split_code(code)
+    assert (result["markers"], result["markers_partner"]) == (markers, markers_partner)
