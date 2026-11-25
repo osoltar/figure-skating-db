@@ -73,6 +73,7 @@ CREATE TABLE elements (
     rotations       INTEGER,                -- throws and twists: number of rotations
     jump            TEXT,                   -- throws: jump type ('S', 'Lo', 'F'...)
     base_value      REAL NOT NULL,
+    expected_base_value REAL,               -- computed from the Scale of Values (NULL: not checkable)
     second_half     INTEGER NOT NULL DEFAULT 0,
     goe             REAL,                   -- NULL if no GOE (element not validated)
     panel_score     REAL NOT NULL,

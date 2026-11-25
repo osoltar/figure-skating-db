@@ -10,6 +10,7 @@ from create_db import create_db, DB_PATH
 from index_parser import find_event_info, find_schedule, find_segments
 from parser import parse, check_skater
 from panel_parser import parse_panel
+from base_values import expected_base_value
 from sov_parser import parse_sov
 
 RAW_DIR = Path("data/raw")
@@ -52,7 +53,11 @@ def parse_cached(path, fingerprint, parse_function=parse):
 
 
 def load_scale_of_values(con):
-    """Load every Scale of Values PDF in data/raw/sov, e.g. 26-27_SOV_SinglesPairs.pdf."""
+    """Load every Scale of Values PDF in data/raw/sov (e.g. 26-27_SOV_SinglesPairs.pdf),
+    plus the hand-written additions in data/reference/sov_additions.csv.
+
+    Returns {(season, discipline): {code: base_value}} for the base value check.
+    """
     fingerprint = parser_fingerprint(SOV_PARSER_FILES)
     for path in sorted(SOV_DIR.glob("*.pdf")):
         season, _, discipline = path.stem.split("_")
@@ -68,6 +73,28 @@ def load_scale_of_values(con):
                   path.name) for r in rows],
             )
         print(f"{path.name}: {len(rows)} element codes loaded ({'cache' if cached else 'parsed'})")
+
+    # Codes missing from the PDFs (e.g. not readable as text); never replace a PDF value
+    additions = REFERENCE_DIR / "sov_additions.csv"
+    if additions.exists():
+        with open(additions, newline="", encoding="utf-8-sig") as f:
+            rows = list(csv.DictReader(f))
+        with con:
+            con.executemany(
+                "INSERT OR IGNORE INTO scale_of_values (season, discipline, code, base_value, "
+                "goe_m5, goe_m4, goe_m3, goe_m2, goe_m1, goe_p1, goe_p2, goe_p3, goe_p4, goe_p5, "
+                "source_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(r["season"], r["discipline"], r["code"], r["base_value"],
+                  r["goe_m5"], r["goe_m4"], r["goe_m3"], r["goe_m2"], r["goe_m1"],
+                  r["goe_p1"], r["goe_p2"], r["goe_p3"], r["goe_p4"], r["goe_p5"],
+                  additions.name) for r in rows],
+            )
+
+    sov = {}
+    for season, discipline, code, base_value in con.execute(
+            "SELECT season, discipline, code, base_value FROM scale_of_values"):
+        sov.setdefault((season, discipline), {})[code] = base_value
+    return sov
 
 
 EVENT_FIELDS = ["city", "country", "venue", "start_date", "end_date"]
@@ -147,7 +174,7 @@ def get_or_create(con, table, **values):
     return cur.lastrowid
 
 
-def load_file(con, path, competitions, fingerprint, missing):
+def load_file(con, path, competitions, fingerprint, missing, sov):
     """Parse one PDF and insert everything into the database.
 
     `missing` collects competition details found nowhere, as {event_code: {field, ...}},
@@ -223,6 +250,13 @@ def load_file(con, path, competitions, fingerprint, missing):
             print(f"  WARNING {path.name}: panel lists judges {panel_judges} "
                   f"but scores have {n_scores} judge columns")
 
+    # Scale of Values for this season and discipline (None: no base value check)
+    discipline = "IceDance" if meta["category"] == "ID" else "SinglesPairs"
+    sov_table = sov.get((meta["season"], discipline))
+    if sov_table is None:
+        print(f"  WARNING {path.name}: no Scale of Values for {meta['season']} {discipline}, "
+              f"base values not checked")
+
     for s in skaters:
         skater_id = get_or_create(
             con, "skaters", first_name=s["first_name"], last_name=s["last_name"],
@@ -243,19 +277,25 @@ def load_file(con, path, competitions, fingerprint, missing):
 
         for e in s["elements"]:
             split = e["split"]
+            expected = expected_base_value(e, sov_table) if sov_table else None
+            if sov_table and expected is None:
+                print(f"  WARNING {path.name} | {s['name']}: can't check base value of {e['code']}")
+            elif expected is not None and abs(expected - e["base_value"]) > 0.01:
+                print(f"  WARNING {path.name} | {s['name']}: {e['code']} base value is "
+                      f"{e['base_value']}, Scale of Values gives {expected}")
             element_id = con.execute(
                 "INSERT INTO elements (performance_id, number, code, kind, info, fall, "
                 "invalid, flags, base, level, level_partner, markers, markers_partner, key_points, "
                 "rotations, jump, "
-                "base_value, second_half, goe, panel_score) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "base_value, expected_base_value, second_half, goe, panel_score) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (performance_id, e["number"], e["code"], split["kind"],
                  " ".join(e["info"]), any(i in ("F", "Fx") for i in e["info"]), "*" in e["info"],
                  "+".join(split["flags"]), split.get("base"), split.get("level"),
                  split.get("level_partner"), split.get("markers"), split.get("markers_partner"),
                  split.get("key_points"),
                  split.get("rotations"),
-                 split.get("jump"), e["base_value"], e["second_half"], e["goe"],
+                 split.get("jump"), e["base_value"], expected, e["second_half"], e["goe"],
                  e["panel_score"]),
             ).lastrowid
 
@@ -295,7 +335,7 @@ def main():
     create_db()
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA foreign_keys = ON")
-    load_scale_of_values(con)
+    sov = load_scale_of_values(con)
     competitions = read_competitions()
     fingerprint = parser_fingerprint()
     n_cached = n_parsed = 0
@@ -303,7 +343,7 @@ def main():
     for path in sorted(RAW_DIR.glob("*.pdf")):
         start = time.perf_counter()
         with con:
-            n, cached = load_file(con, path, competitions, fingerprint, missing)
+            n, cached = load_file(con, path, competitions, fingerprint, missing, sov)
         seconds = time.perf_counter() - start
         source = "cache" if cached else "parsed"
         print(f"{path.name}: {n} skaters loaded ({source}, {seconds:.2f}s)")

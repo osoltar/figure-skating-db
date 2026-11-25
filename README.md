@@ -24,7 +24,7 @@ results pages ──► download ──► PDFs + panel pages ──► parsers 
 2. **Parse protocols**: `src/parser.py` reads each protocol line by line and extracts skaters, elements, judges' GOEs and program components.
 3. **Split element codes**: `src/element_codes.py` breaks codes like `3Lz!+2T` or `3A+Eu+2S+2A+SEQ` into individual jumps (rotations, jump type, calls such as `<`, `<<`, `q`, `e`, `!`, `*`), and recognises spins, step and choreographic sequences, attempted jumps and empty element slots, plus the pairs and ice dance elements: twists and throws (with rotations and jump type), lifts, death spirals, twizzles, step sequences with a level per partner, and the pattern dance with its key points.
 4. **Parse panels**: `src/panel_parser.py` reads the panel of judges page: referee, technical panel, judges 1–9 and operators.
-5. **Validate**: for every skater, the element scores must add up to the TES, the factored components to the PCS, and TES + PCS − deductions to the total. Ranks must run 1..N without gaps, and the panel must list as many judges as there are judge columns in the scores. Anything that doesn't match is reported.
+5. **Validate**: for every skater, the element scores must add up to the TES, the factored components to the PCS, and TES + PCS − deductions to the total. Ranks must run 1..N without gaps, and the panel must list as many judges as there are judge columns in the scores. Every element's printed base value must match the value computed from the ISU Scale of Values (`src/base_values.py`: calls, combinations, +REP, second-half bonus, levels per partner in ice dance...). Anything that doesn't match is reported.
 6. **Load**: `src/load.py` rebuilds the database from scratch from all downloaded files plus the hand-curated reference files.
 
 The downloaded files are the source of truth: the database is never edited by hand and can be rebuilt at any time.
@@ -65,7 +65,7 @@ Saved in [`queries/`](queries/):
 - men's triple Axel GOE ranking
 - most used jumps in women's programs
 - judges' GOE compared with the rest of the panel, including for skaters from their own country
-- printed base values checked against the Scale of Values
+- elements whose printed base value differs from the Scale of Values (none in the 2026/27 data so far)
 
 Charts are in [`notebooks/exploration.ipynb`](notebooks/exploration.ipynb).
 
@@ -117,7 +117,7 @@ data/
     index/      results index pages, for the time schedule (not in git)
     sov/        ISU Scales of Values, e.g. 26-27_SOV_SinglesPairs.pdf (not in git)
   processed/    skating.db (not in git)
-  reference/    hand-curated data: competitions.csv
+  reference/    hand-curated data: competitions.csv, sov_additions.csv (SOV codes missing from the PDFs)
 notebooks/      exploration notebook with charts
 queries/        saved SQL queries
 src/
@@ -127,6 +127,7 @@ src/
   element_codes.py  element code splitting
   panel_parser.py   panel of judges page → Python data
   sov_parser.py     Scale of Values PDF → base value and GOE per element code
+  base_values.py    expected base value of an element, from the Scale of Values
   schema.sql        tables and views
   create_db.py      creates an empty database
   load.py           builds the database from all files

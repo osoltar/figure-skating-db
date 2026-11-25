@@ -8,14 +8,15 @@
 - [ ] Expand scope: ~~Challenger Series~~ (done), NHK Trophy, Grand Prix Final, Europeans, Four Continents, Worlds
 - [ ] Add previous seasons
 - [x] Add pairs and ice dance
-- [ ] Full base value check: combinations and sequences (sum of parts), +REP, dance elements with a level per partner (CiStW + CiStM), pattern dance key points, combined lifts, invalid elements; then turn it into a loader validation like TES/PCS
+- [x] Full base value check: combinations and sequences (sum of parts), +REP, dance elements with a level per partner (CiStW + CiStM), pattern dance key points, combined lifts, invalid elements; then turn it into a loader validation like TES/PCS
 - [ ] Download the Scales of Values automatically (US Figure Skating hosts them)
 - [ ] Pairs and dance details: pattern dance key points one by one, lift groups and types, each lift of a combined lift, Advanced Novice / junior pattern dance sequences (FO1Sq4...) if lower levels are ever added
 - [ ] Handle old scoring rules (GOE ±3 before 2018, old component names before 2022)
 - [ ] Link skaters to their ISU page (isu-skating.com slug)
 - [ ] Improve skater matching: PDFs have no birth date, so skaters are matched on first + last name for now; add birth date and handle name changes
 - [ ] Name corrections: data/reference/skater_names.csv mapping a name as printed in protocols to the correct first/last name split (e.g. Sophie Joline von FELTEN, where "von" ends up in the first name), applied by the loader before matching; can also fix spelling differences between events
-- [ ] Find out what the `+RFE` flag means (not in the TP Handbook 2026/27, Communication 2788 or the protocol legend); stored as printed for now
+- [ ] Find out what the `+RFE` flag means (not in the TP Handbook 2026/27, Communication 2788, the protocol legend or the ISU abbreviation list); valued like +REP (80%) in the protocols
+- [ ] Find out what `P` means in the Info column (seen on 1A+2A*+Eu*+3S<*+SEQ+RFE, Budapest Trophy)
 
 ## Features
 - [x] Rankings: best elements by GOE, best spinners, most used jumps
