@@ -15,6 +15,9 @@ DECIMAL_RE = re.compile(r"^-?\d+\.\d+$")   # 8.80, -0.27
 JUDGE_RE = re.compile(r"^(-?\d|-)$")       # one judge's GOE: -5..5, or "-" if missing
 # Component line, e.g. "Composition 1.67 9.25 9.50 9.00 8.75 9.25 8.75 9.25 9.00 9.00 9.07"
 COMPONENT_RE = re.compile(r"^(Composition|Presentation|Skating Skills)\s+(\d+\.\d\d)\s+(.+)$")
+# One deduction in the deduction line: "Falls -2.00 (2)", "Time violation -1.00",
+# "Illegal element/movement -2.00" (type, points, and a count for falls)
+DEDUCTION_RE = re.compile(r"([A-Za-z][A-Za-z/ ]*?)\s+(-?\d+\.\d\d)(?:\s+\((\d+)\))?")
 
 
 def read_lines(path):
@@ -59,6 +62,8 @@ def parse_skater(match):
         "deductions": float(ded),
         "elements": [],
         "components": [],
+        "deduction_items": [],      # from the "Deductions:" line
+        "deduction_total": None,
     }
 
 
@@ -117,6 +122,21 @@ def parse_element(line):
     }
 
 
+def parse_deductions(line):
+    """Parse a deduction line, e.g.
+        "Deductions: Time violation -1.00 Falls -2.00 (2) -3.00"
+    into ([{"type": "Time violation", "points": -1.0, "count": None},
+           {"type": "Falls", "points": -2.0, "count": 2}], -3.0).
+    Returns None if the line is not a deduction line."""
+    if not line.startswith("Deductions:"):
+        return None
+    rest = line[len("Deductions:"):].strip()
+    *details, total = rest.rsplit(" ", 1) if " " in rest else ["", rest]
+    items = [{"type": kind.strip(), "points": float(points), "count": int(count) if count else None}
+             for kind, points, count in DEDUCTION_RE.findall(details[0] if details else "")]
+    return items, float(total)
+
+
 def parse_component(line):
     """Parse a component line. Returns a dictionary, or None."""
     match = COMPONENT_RE.match(line)
@@ -154,6 +174,10 @@ def parse(path):
         component = parse_component(line)
         if component:
             current["components"].append(component)
+            continue
+        deductions = parse_deductions(line)
+        if deductions:
+            current["deduction_items"], current["deduction_total"] = deductions
     return skaters
 
 def check_skater(s):
@@ -176,6 +200,19 @@ def check_skater(s):
     total = round(s["tes"] + s["pcs"] - abs(s["deductions"]), 2)
     if abs(total - s["total"]) >= 0.01:
         problems.append(f"total is {s['total']} but TES + PCS - deductions = {total}")
+
+    # The deduction line: its items add up to its total, which matches the header
+    if s.get("deduction_total") is None:
+        if abs(s["deductions"]) > 0.001:
+            problems.append(f"deductions are {s['deductions']} but no deduction line found")
+    else:
+        items_sum = round(sum(item["points"] for item in s["deduction_items"]), 2)
+        if abs(items_sum - s["deduction_total"]) > 0.001:
+            problems.append(f"deduction line items add up to {items_sum}, "
+                            f"line total is {s['deduction_total']}")
+        if abs(abs(s["deduction_total"]) - abs(s["deductions"])) > 0.001:
+            problems.append(f"deduction line total is {s['deduction_total']}, "
+                            f"header says {s['deductions']}")
 
     for e in s["elements"]:
         if e["split"]["kind"] == "unknown":

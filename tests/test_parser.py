@@ -102,3 +102,35 @@ def test_pair_team_is_split_into_two_people():
 def test_singles_skater_has_no_partner():
     s = parse_skater(SKATER_RE.match(SKATER_LINE))
     assert s["partner_first_name"] is None and s["partner_last_name"] is None
+
+
+# --- Deduction line (all shapes found in the 2026/27 protocols) ---
+from parser import parse_deductions
+
+
+@pytest.mark.parametrize("line, items, total", [
+    ("Deductions: 0.00", [], 0.0),
+    ("Deductions: Falls -1.00 (1) -1.00", [("Falls", -1.0, 1)], -1.0),
+    ("Deductions: Time violation -1.00 Falls -2.00 (2) -3.00",
+     [("Time violation", -1.0, None), ("Falls", -2.0, 2)], -3.0),
+    ("Deductions: Illegal element/movement -2.00 Extended lifts -1.00 -3.00",
+     [("Illegal element/movement", -2.0, None), ("Extended lifts", -1.0, None)], -3.0),
+    ("Deductions: Interruption in excess -1.00 Falls -2.00 (2) -3.00",
+     [("Interruption in excess", -1.0, None), ("Falls", -2.0, 2)], -3.0),
+])
+def test_deduction_line(line, items, total):
+    parsed, parsed_total = parse_deductions(line)
+    assert [(d["type"], d["points"], d["count"]) for d in parsed] == items
+    assert parsed_total == total
+
+
+def test_other_lines_are_not_deductions():
+    assert parse_deductions("Judges Total Program Component Score (factored) 45.21") is None
+
+
+def test_deductions_must_match_the_header(skater):
+    skater["deduction_items"], skater["deduction_total"] = [], 0.0
+    assert check_skater(skater) == []
+    skater["deduction_items"] = [{"type": "Falls", "points": -1.0, "count": 1}]
+    skater["deduction_total"] = -1.0
+    assert any("header" in p for p in check_skater(skater))

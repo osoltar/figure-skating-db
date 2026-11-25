@@ -282,6 +282,12 @@ def load_file(con, path, competitions, fingerprint, missing, sov):
              s["total"], s["tes"], s["pcs"], s["deductions"]),
         ).lastrowid
 
+        con.executemany(
+            "INSERT INTO deductions (performance_id, type, points, count) VALUES (?, ?, ?, ?)",
+            [(performance_id, d["type"], d["points"], d["count"])
+             for d in s.get("deduction_items", [])],
+        )
+
         for e in s["elements"]:
             split = e["split"]
             expected = expected_base_value(e, sov_table) if sov_table else None

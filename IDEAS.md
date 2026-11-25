@@ -16,6 +16,7 @@
 - [ ] Improve skater matching: PDFs have no birth date, so skaters are matched on first + last name for now; add birth date and handle name changes
 - [ ] Name corrections: data/reference/skater_names.csv mapping a name as printed in protocols to the correct first/last name split (e.g. Sophie Joline von FELTEN, where "von" ends up in the first name), applied by the loader before matching; can also fix spelling differences between events
 - [ ] Find out what the `+RFE` flag means (not in the TP Handbook 2026/27, Communication 2788, the protocol legend or the ISU abbreviation list); valued like +REP (80%) in the protocols
+- [ ] Ice dance: line "Violation of choreo restrictions (2 of 8)" after some deduction lines (no points): store it?
 - [ ] Find out what `P` means in the Info column (seen on 1A+2A*+Eu*+3S<*+SEQ+RFE, Budapest Trophy)
 
 ## Features

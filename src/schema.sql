@@ -52,6 +52,16 @@ CREATE TABLE performances (
     UNIQUE (segment_id, skater_id)
 );
 
+-- Deductions of a performance, one row per type, from the protocol's deduction line,
+-- e.g. "Deductions: Time violation -1.00 Falls -2.00 (2) -3.00" -> 2 rows
+CREATE TABLE deductions (
+    performance_id  INTEGER NOT NULL REFERENCES performances(id),
+    type            TEXT NOT NULL,          -- 'Falls', 'Time violation', 'Extended lifts', ...
+    points          REAL NOT NULL,          -- negative, as printed: -2.00
+    count           INTEGER,                -- falls only: number of falls, (2)
+    PRIMARY KEY (performance_id, type)
+);
+
 CREATE TABLE elements (
     id              INTEGER PRIMARY KEY,
     performance_id  INTEGER NOT NULL REFERENCES performances(id),
