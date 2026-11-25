@@ -11,6 +11,7 @@ from index_parser import find_event_info, find_schedule, find_segments
 from parser import parse, check_skater
 from panel_parser import parse_panel
 from base_values import expected_base_value
+from goe import component_score, panel_goe
 from sov_parser import parse_sov
 
 RAW_DIR = Path("data/raw")
@@ -56,7 +57,8 @@ def load_scale_of_values(con):
     """Load every Scale of Values PDF in data/raw/sov (e.g. 26-27_SOV_SinglesPairs.pdf),
     plus the hand-written additions in data/reference/sov_additions.csv.
 
-    Returns {(season, discipline): {code: base_value}} for the base value check.
+    Returns {(season, discipline): {code: row}} (row = base_value and goe_m5..goe_p5),
+    used for the base value and GOE checks.
     """
     fingerprint = parser_fingerprint(SOV_PARSER_FILES)
     for path in sorted(SOV_DIR.glob("*.pdf")):
@@ -91,9 +93,11 @@ def load_scale_of_values(con):
             )
 
     sov = {}
-    for season, discipline, code, base_value in con.execute(
-            "SELECT season, discipline, code, base_value FROM scale_of_values"):
-        sov.setdefault((season, discipline), {})[code] = base_value
+    cursor = con.execute("SELECT * FROM scale_of_values")
+    columns = [d[0] for d in cursor.description]       # the column names
+    for values in cursor:
+        row = dict(zip(columns, values))
+        sov.setdefault((row["season"], row["discipline"]), {})[row["code"]] = row
     return sov
 
 
@@ -252,10 +256,13 @@ def load_file(con, path, competitions, fingerprint, missing, sov):
 
     # Scale of Values for this season and discipline (None: no base value check)
     discipline = "IceDance" if meta["category"] == "ID" else "SinglesPairs"
-    sov_table = sov.get((meta["season"], discipline))
-    if sov_table is None:
+    sov_rows = sov.get((meta["season"], discipline))
+    if sov_rows is None:
         print(f"  WARNING {path.name}: no Scale of Values for {meta['season']} {discipline}, "
-              f"base values not checked")
+              f"base values and GOE not checked")
+        sov_table = None
+    else:
+        sov_table = {code: row["base_value"] for code, row in sov_rows.items()}
 
     for s in skaters:
         skater_id = get_or_create(
@@ -283,12 +290,18 @@ def load_file(con, path, competitions, fingerprint, missing, sov):
             elif expected is not None and abs(expected - e["base_value"]) > 0.01:
                 print(f"  WARNING {path.name} | {s['name']}: {e['code']} base value is "
                       f"{e['base_value']}, Scale of Values gives {expected}")
+            # GOE recomputed from the judges' marks
+            expected_goe, judge_points = (panel_goe(e, sov_rows) if sov_rows
+                                          else (None, [None] * len(e["judges"])))
+            if expected_goe is not None and e["goe"] is not None and abs(expected_goe - e["goe"]) > 0.01:
+                print(f"  WARNING {path.name} | {s['name']}: {e['code']} GOE is {e['goe']}, "
+                      f"judges' marks give {expected_goe}")
             element_id = con.execute(
                 "INSERT INTO elements (performance_id, number, code, kind, info, fall, "
                 "invalid, flags, base, level, level_partner, markers, markers_partner, key_points, "
                 "rotations, jump, "
-                "base_value, expected_base_value, second_half, goe, panel_score) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "base_value, expected_base_value, second_half, goe, expected_goe, panel_score) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (performance_id, e["number"], e["code"], split["kind"],
                  " ".join(e["info"]), any(i in ("F", "Fx") for i in e["info"]), "*" in e["info"],
                  "+".join(split["flags"]), split.get("base"), split.get("level"),
@@ -296,7 +309,7 @@ def load_file(con, path, competitions, fingerprint, missing, sov):
                  split.get("key_points"),
                  split.get("rotations"),
                  split.get("jump"), e["base_value"], expected, e["second_half"], e["goe"],
-                 e["panel_score"]),
+                 expected_goe, e["panel_score"]),
             ).lastrowid
 
             for p in split["parts"]:
@@ -311,15 +324,21 @@ def load_file(con, path, competitions, fingerprint, missing, sov):
                 )
 
             con.executemany(
-                "INSERT INTO element_judge_scores (element_id, judge, goe) VALUES (?, ?, ?)",
-                [(element_id, j, goe) for j, goe in enumerate(e["judges"], start=1)],
+                "INSERT INTO element_judge_scores (element_id, judge, goe, goe_points) "
+                "VALUES (?, ?, ?, ?)",
+                [(element_id, j, goe, points)
+                 for j, (goe, points) in enumerate(zip(e["judges"], judge_points), start=1)],
             )
 
         for c in s["components"]:
+            expected_score = component_score(c["judges"])
+            if expected_score is not None and abs(expected_score - c["panel_score"]) > 0.01:
+                print(f"  WARNING {path.name} | {s['name']}: {c['name']} is {c['panel_score']}, "
+                      f"judges' marks give {expected_score}")
             component_id = con.execute(
-                "INSERT INTO components (performance_id, name, factor, panel_score) "
-                "VALUES (?, ?, ?, ?)",
-                (performance_id, c["name"], c["factor"], c["panel_score"]),
+                "INSERT INTO components (performance_id, name, factor, panel_score, "
+                "expected_panel_score) VALUES (?, ?, ?, ?, ?)",
+                (performance_id, c["name"], c["factor"], c["panel_score"], expected_score),
             ).lastrowid
             con.executemany(
                 "INSERT INTO component_judge_scores (component_id, judge, mark) "

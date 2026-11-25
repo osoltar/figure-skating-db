@@ -76,6 +76,7 @@ CREATE TABLE elements (
     expected_base_value REAL,               -- computed from the Scale of Values (NULL: not checkable)
     second_half     INTEGER NOT NULL DEFAULT 0,
     goe             REAL,                   -- NULL if no GOE (element not validated)
+    expected_goe    REAL,                   -- recomputed from the judges' marks (NULL: not checkable)
     panel_score     REAL NOT NULL,
     UNIQUE (performance_id, number)
 );
@@ -101,6 +102,7 @@ CREATE TABLE element_judge_scores (
     element_id  INTEGER NOT NULL REFERENCES elements(id),
     judge       INTEGER NOT NULL,           -- 1..9
     goe         INTEGER,                    -- NULL if '-'
+    goe_points  REAL,                       -- this judge's GOE in points (Scale of Values)
     PRIMARY KEY (element_id, judge)
 );
 
@@ -110,6 +112,7 @@ CREATE TABLE components (
     name            TEXT NOT NULL,          -- 'Composition', 'Presentation', 'Skating Skills'
     factor          REAL NOT NULL,
     panel_score     REAL NOT NULL,
+    expected_panel_score REAL,              -- trimmed mean of the judges' marks
     UNIQUE (performance_id, name)
 );
 

@@ -22,6 +22,7 @@
 - [x] Rankings: best elements by GOE, best spinners, most used jumps
 - [ ] Skater score progression over a season / career
 - [x] Judge analysis: GOE compared with the rest of the panel, home judge difference
+- [x] Recompute GOE and component scores from the judges' marks (trimmed mean), store each judge's GOE in points
 - [ ] Judge analysis on component marks
 - [ ] Technical panel analysis: rotation and edge calls by technical specialist / controller
 
